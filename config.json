@@ -1,0 +1,10 @@
+{
+  "systemTitle": "XX学校体测系统",
+  "isLocked": false,
+  "lockMessage": "系统维护中，暂停登录。",
+  "users": [
+    { "id": "dcd", "name": "段老师", "pass": "123456", "active": true },
+    { "id": "t002", "name": "刘老师", "pass": "123456", "active": true },
+    { "id": "admin", "name": "管理员", "pass": "admin", "active": true }
+  ]
+}
