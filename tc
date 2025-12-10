@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>体质健康测试分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif; background-color: #f2f2f2; font-size: 13px; margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* 工具栏 */
+        .toolbar { background: #217346; color: white; padding: 8px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 50px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 60; }
+        .app-title { font-weight: bold; font-size: 1.2rem; margin-right: 15px; white-space: nowrap; }
+        
+        .btn { background: #f3f3f3; border: 1px solid #ccc; color: #333; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; white-space: nowrap; user-select: none; transition: all 0.1s; }
+        .btn:active { background: #e0e0e0; transform: translateY(1px); }
+        .btn-green { background: #4caf50; color: white; border: none; }
+        .btn-red { background: #f44336; color: white; border: none; }
+        .btn-blue { background: #2196f3; color: white; border: none; }
+        .btn-purple { background: #9c27b0; color: white; border: none; }
+        .btn-orange { background: #ff9800; color: white; border: none; }
+        .btn-warn-nav { background: #d32f2f; color: white; border: 2px solid white; animation: pulse 2s infinite; display: none; }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        
+        .pagination { display: flex; align-items: center; gap: 5px; margin-left: auto; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; }
+        .page-info { font-size: 13px; color: #fff; font-weight: bold; font-family: monospace; min-width: 150px; text-align: center; }
+
+        .tabs { display: flex; background: #fff; border-bottom: 1px solid #ccc; padding-left: 10px; height: 40px; align-items: flex-end; flex-shrink: 0; }
+        .tab { padding: 8px 25px; cursor: pointer; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0; color: #666; font-size: 14px; margin-right: 2px; }
+        .tab.active { border-color: #ccc; border-bottom-color: #fff; background: #fff; color: #217346; font-weight: bold; margin-bottom: -1px; z-index: 5; }
+
+        .excel-container { flex: 1; overflow: auto; background: white; border-top: 1px solid #d4d4d4; position: relative; scroll-behavior: smooth; }
+
+        /* 表格样式 */
+        table { table-layout: fixed; border-collapse: separate; border-spacing: 0; min-width: 100%; white-space: nowrap; border-left: 1px solid #a0a0a0; }
+        th, td { border-right: 1px solid #a0a0a0; border-bottom: 1px solid #a0a0a0; padding: 0; text-align: center; height: 34px; box-sizing: border-box; overflow: hidden; }
+        thead tr:first-child th { position: sticky; top: 0; z-index: 50; height: 35px; border-bottom: 1px solid #a0a0a0; }
+        thead tr:last-child th { position: sticky; top: 35px; z-index: 50; height: 35px; border-bottom: 3px solid #444 !important; }
+
+        /* 列宽设置 */
+        .col-id { width: 60px; min-width: 60px; } 
+        .col-class { width: 70px; min-width: 70px; } 
+        .col-code { width: 130px; min-width: 130px; } 
+        .col-name { width: 75px; min-width: 75px; }
+        .col-addr { width: 150px; min-width: 150px; }
+        .col-std { width: 60px; min-width: 60px; }
+        .col-w-xs { width: 45px; min-width: 45px; }
+        
+        input.cell-input { width: 100%; height: 100%; border: none; outline: none; text-align: center; background: transparent; font-family: inherit; font-size: 13px; color: #000; font-weight: 500; }
+        input[disabled] { background-color: #f9f9f9; color: #ccc; cursor: not-allowed; }
+        tbody tr:focus-within td { background-color: #fff9c4 !important; }
+        .modified-data { background-color: #d1fae5 !important; }
+        .modified-data input { color: #047857 !important; font-weight: bold; }
+        .cell-warn { background-color: #ffebee !important; border: 2px solid #ef5350 !important; }
+        .text-error { color: #d32f2f; font-weight: bold; }
+        .row-focus-error td { animation: flash 1s 3; border-top: 2px solid red; border-bottom: 2px solid red; }
+        @keyframes flash { 0% { background-color: #ffcdd2; } 50% { background-color: #fff; } 100% { background-color: #ffcdd2; } }
+
+        /* 颜色与样式 */
+        .bg-header-base { background-color: #ffffff; color: #000; font-weight: bold; }
+        .bg-header-score { background-color: #ffff00; color: #000; font-weight: bold; }
+        .text-exc { color: #008000; font-weight: bold; }
+        .text-good { color: #0000ff; font-weight: bold; }
+        .text-pass { color: #333; }
+        .text-fail { color: #ff0000; font-weight: bold; background-color: #fff0f0; }
+        .text-bmi-norm { color: #008000; font-weight: bold; }
+        .text-bmi-warn { color: #ff9800; font-weight: bold; }
+        .text-bmi-bad { color: #ff0000; font-weight: bold; background-color: #ffebee; }
+        .text-total { color: #ff0000; font-weight: bold; font-size: 14px; text-decoration: underline; }
+        .calc-cell { cursor: help; background-color: #fefefe; }
+        .hidden { display: none; }
+        
+        /* 报表区域 */
+        .report-section { padding: 15px; background: white; overflow: auto; flex: 1; }
+        .report-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .report-table th, .report-table td { border: 1px solid #000; padding: 6px 4px; text-align: center; }
+        .report-header-blue { background-color: #00b0f0; color: white; font-weight: bold; }
+        .report-title { font-size: 16px; font-weight: bold; margin: 20px 0 10px; border-left: 6px solid #00b0f0; padding-left: 12px; color: #333; }
+        
+        @media (max-width: 640px) {
+            .toolbar { justify-content: space-between; }
+            .btn { flex-grow: 1; justify-content: center; padding: 8px; font-size: 12px;}
+            .app-title { width: 100%; text-align: center; margin-bottom: 5px; margin-right: 0; }
+            .pagination { width: 100%; justify-content: space-between; margin-top: 5px; order: 10; }
+        }
+    </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div id="login-screen" class="fixed inset-0 bg-gray-800 flex items-center justify-center z-[100]">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-80 text-center">
+        <h2 id="lock-title" class="text-xl font-bold mb-4 text-gray-700">🔒 系统登录</h2>
+        <p id="lock-tip" class="text-gray-500 text-sm mb-4">请验证身份</p>
+        
+        <div class="mb-3 text-left">
+            <label class="text-xs text-gray-400 ml-1">账号</label>
+            <input type="text" id="userInput" class="w-full border border-gray-300 p-2 rounded text-lg outline-none focus:border-green-500" placeholder="请输入工号/账号">
+        </div>
+
+        <div class="mb-6 text-left">
+            <label class="text-xs text-gray-400 ml-1">密码</label>
+            <input type="password" id="passInput" class="w-full border border-gray-300 p-2 rounded text-lg outline-none focus:border-green-500" placeholder="请输入密码">
+        </div>
+
+        <button id="loginBtn" onclick="doLogin()" class="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700 transition">登录系统</button>
+        <p id="login-msg" class="text-red-500 text-xs mt-2 hidden">账号或密码错误</p>
+    </div>
+    
+
+</div>  <div id="app-content" class="hidden" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    
+    <div class="toolbar">
+        <span class="app-title">📊 体测数据中心</span>
+        
+        <input type="file" id="infoInput" accept=".xlsx,.xls" style="display:none" onchange="importBasicInfo(event)">
+        <button class="btn btn-blue" onclick="document.getElementById('infoInput').click()">1️⃣ 导入基本信息</button>
+        
+        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">2️⃣ 导入成绩</button>
+      
+        
+        <button class="btn btn-orange" onclick="runSmartCheck()">3️⃣ 🔍 智能校验</button>
+        <button class="btn btn-purple" onclick="openOptimizeDialog()">4️⃣ ⚡ 黑科技</button>
+        <button class="btn btn-warn-nav" id="btnWarnNav" onclick="scrollToNextWarn()">⚠️ 定位异常 (0)</button>
+        <button class="btn" onclick="addNewRow()">➕ 行</button>
+        <button class="btn btn-green" onclick="exportAllData()">5️⃣ 导出全校上报表</button>
+        <button class="btn btn-green" onclick="exportSplitClassExcel()">📂 分班导出</button>
+        <button class="btn btn-blue" onclick="exportAnalysisExcel()">📊 导出统计报告</button>
+        
+        <button class="btn btn-red" onclick="deleteCurrentClass()">🗑️ 删当前班</button>
+        <button class="btn btn-red" onclick="clearTable()">🗑️ 清空</button>
+        
+        <div class="pagination">
+            <button class="btn" onclick="changeClass(-1)">◀ 上一班</button>
+            <span id="page-info" class="page-info">暂无数据</span>
+            <button class="btn" onclick="changeClass(1)">下一班 ▶</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchView('data')" id="tab-data">数据录入</div>
+        <div class="tab" onclick="switchView('report')" id="tab-report">分析报告</div>
+    </div>
+
+    <div id="view-data" class="excel-container">
+        <table id="mainTable">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="bg-header-base col-id">年级<br>编号</th>
+                    <th rowspan="2" class="bg-header-base col-id">班级<br>编号</th>
+                    <th rowspan="2" class="bg-header-base col-class">班级<br>名称</th>
+                    <th rowspan="2" class="bg-header-base col-code">学籍号</th>
+                    <th rowspan="2" class="bg-header-base col-w-xs">民族</th>
+                    <th rowspan="2" class="bg-header-base col-name">姓名</th>
+                    <th rowspan="2" class="bg-header-base col-w-xs">性别</th>
+                    <th rowspan="2" class="bg-header-base" style="width:90px; min-width:90px">出生日期</th>
+                    <th rowspan="2" class="bg-header-base col-addr">家庭住址</th>
+
+                    <th rowspan="2" class="bg-header-base col-std">身高<br>(cm)</th>
+                    <th rowspan="2" class="bg-header-base col-std">体重<br>(kg)</th>
+                    <th rowspan="2" class="bg-header-base col-std">肺活量<br>(ml)</th>
+                    <th rowspan="2" class="bg-header-base col-std">50米跑<br>(s)</th>
+                    <th rowspan="2" class="bg-header-base col-std">坐位<br>体前屈</th>
+                    <th rowspan="2" class="bg-header-base col-std">一分钟<br>仰卧起坐</th>
+                    <th rowspan="2" class="bg-header-base col-std">立定<br>跳远</th>
+                    <th rowspan="2" class="bg-header-base col-std">引体<br>向上</th>
+                    <th rowspan="2" class="bg-header-base col-std">1000米跑</th>
+                    <th rowspan="2" class="bg-header-base col-std">800米跑</th>
+                    
+                    <th colspan="2" class="bg-header-score">BMI(15%)</th>
+                    <th colspan="2" class="bg-header-score">肺活量(15%)</th>
+                    <th colspan="2" class="bg-header-score">50米跑(20%)</th>
+                    <th colspan="2" class="bg-header-score">立定跳远(10%)</th>
+                    <th colspan="2" class="bg-header-score">坐位体前屈(10%)</th>
+                    <th colspan="2" class="bg-header-score">800米跑(20%)</th>
+                    <th colspan="2" class="bg-header-score">1000米跑(20%)</th>
+                    <th colspan="2" class="bg-header-score">仰卧起坐(10%)</th>
+                    <th colspan="2" class="bg-header-score">引体向上(10%)</th>
+                    
+                    <th rowspan="2" class="bg-header-score col-w-xs">附加<br>分</th>
+                    <th rowspan="2" class="bg-header-score col-std" style="color:red">总分</th>
+                    <th rowspan="2" class="bg-header-score col-std">等级</th>
+                    <th rowspan="2" class="bg-header-base col-w-xs">删</th>
+                </tr>
+                <tr id="subHeader"></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="view-report" class="report-section hidden">
+    <div class="report-title">1. 全校数据汇总</div>
+    <div id="report-overall" style="overflow-x:auto;"></div>
+    <div style="height: 350px;"><canvas id="chart-overall"></canvas></div> 
+    
+    <div class="report-title">2. 各项目优良率 (男女分项)</div>
+    <div id="report-items" style="overflow-x:auto;"></div>
+    <div style="height: 350px;"><canvas id="chart-items"></canvas></div>
+
+    <div class="report-title">3. 班级详情分析</div>
+    <div id="report-class" style="overflow-x:auto;"></div>
+    <div style="height: 350px;"><canvas id="chart-class"></canvas></div> 
+</div>
+    
+</div> 
+
+<script>
+// 1. 云端配置 (GitHub)
+// ==========================================
+const REMOTE_CONFIG = {
+    // ⚠️ 请将此处替换为你第二步获取的 RAW 链接
+    url: "https://raw.githubusercontent.com/tianjiao14/tc/refs/heads/main/config.json", 
+    sessionKey: "tice_user_session_v4" // 升级版本号以清除旧缓存
+};
+
+// ==========================================
+// 2. 登录与安全逻辑
+// ==========================================
+let CURRENT_USER = null;
+
+// 执行登录
+async function doLogin() {
+    const userIn = document.getElementById('userInput');
+    const passIn = document.getElementById('passInput');
+    const msg = document.getElementById('login-msg');
+    const btn = document.getElementById('loginBtn');
+    const uid = userIn.value.trim();
+    const pwd = passIn.value.trim();
+
+    if (!uid || !pwd) {
+        showError("请输入账号和密码");
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+        btn.innerText = "验证中...";
+        msg.classList.add('hidden');
+
+        // 加时间戳 ?t=... 防止 GitHub 缓存延迟
+        const response = await fetch(REMOTE_CONFIG.url + '?t=' + new Date().getTime());
+        if (!response.ok) throw new Error("连接服务器失败");
+        
+        const data = await response.json();
+
+        // 检查系统锁定
+        if (data.isLocked) {
+            alert(data.lockMessage || "系统已暂停服务");
+            resetBtn();
+            return;
+        }
+
+        // 更新标题
+        if(data.systemTitle) document.getElementById('lock-title').innerText = data.systemTitle;
+
+        // 验证用户
+        const validUser = data.users.find(u => u.id === uid && u.pass === pwd && u.active === true);
+
+        if (validUser) {
+            loginSuccess(validUser);
+        } else {
+            showError("账号密码错误或已被停用");
+            resetBtn();
+            passIn.classList.add('border-red-500');
+            setTimeout(() => passIn.classList.remove('border-red-500'), 200);
+        }
+
+    } catch (e) {
+        console.error(e);
+        showError("网络连接失败，请检查网络");
+        resetBtn();
+    }
+
+    function showError(txt) {
+        msg.innerText = txt;
+        msg.classList.remove('hidden');
+    }
+    function resetBtn() {
+        btn.disabled = false;
+        btn.innerText = "登录系统";
+    }
+}
+function loginSuccess(user) {
+    CURRENT_USER = user;
+    document.getElementById('login-screen').style.display = 'none';
+    const appContent = document.getElementById('app-content');
+    appContent.classList.remove('hidden');
+    appContent.style.display = 'flex'; // 设置为 flex 才能让内部的 flex 布局生效
+    
+    sessionStorage.setItem(REMOTE_CONFIG.sessionKey, JSON.stringify(user));
+    
+    const titleEl = document.querySelector('.app-title');
+    if(titleEl) titleEl.innerText = `📊 ${user.name} | 体测系统`;
+}
+
+document.addEventListener('keyup', function(e) {
+    if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') {
+        doLogin();
+    }
+});
+
+// =================配置区=================
+const STDS = {
+    weights: { bmi:0.15, lung:0.15, run50:0.20, jump:0.10, sit:0.10, runL:0.20, str:0.10 },
+    bmi: { "初一男": [15.4, 22.1, 24.9], "初一女": [14.7, 21.7, 24.4], "初二男": [15.6, 22.5, 25.2], "初二女": [15.2, 22.2, 24.8], "初三男": [15.7, 22.8, 26.0], "初三女": [15.9, 22.6, 25.1], "高一男": [16.4, 23.2, 26.3], "高一女": [16.4, 22.7, 25.2], "高二男": [16.7, 23.7, 26.5], "高二女": [16.8, 23.2, 25.4], "高三男": [17.2, 23.8, 27.3], "高三女": [17.0, 23.3, 25.7] },
+    lung: { "初一男": [[3640,100],[3520,95],[3400,90],[3150,85],[2900,80],[2780,78],[2660,76],[2540,74],[2420,72],[2300,70],[2180,68],[2060,66],[1940,64],[1820,62],[1700,60],[1600,50],[1500,40],[1400,30],[1300,20],[1200,10]], "初二男": [[3940,100],[3820,95],[3700,90],[3450,85],[3200,80],[3080,78],[2960,76],[2840,74],[2720,72],[2600,70],[2480,68],[2360,66],[2240,64],[2120,62],[2000,60],[1890,50],[1780,40],[1670,30],[1560,20],[1450,10]], "初三男": [[4240,100],[4120,95],[4000,90],[3750,85],[3500,80],[3380,78],[3260,76],[3140,74],[3020,72],[2900,70],[2780,68],[2660,66],[2540,64],[2420,62],[2300,60],[2180,50],[2060,40],[1940,30],[1820,20],[1700,10]], "高一男": [[4540,100],[4420,95],[4300,90],[4050,85],[3800,80],[3680,78],[3560,76],[3440,74],[3320,72],[3200,70],[3080,68],[2960,66],[2840,64],[2720,62],[2600,60],[2470,50],[2340,40],[2210,30],[2080,20],[1950,10]], "高二男": [[4740,100],[4620,95],[4500,90],[4250,85],[4000,80],[3880,78],[3760,76],[3640,74],[3520,72],[3400,70],[3280,68],[3160,66],[3040,64],[2920,62],[2800,60],[2660,50],[2520,40],[2380,30],[2240,20],[2100,10]], "高三男": [[4940,100],[4820,95],[4700,90],[4450,85],[4200,80],[4080,78],[3960,76],[3840,74],[3720,72],[3600,70],[3480,68],[3360,66],[3240,64],[3120,62],[3000,60],[2850,50],[2700,40],[2550,30],[2400,20],[2250,10]], "初一女": [[2750,100],[2650,95],[2550,90],[2450,85],[2350,80],[2250,78],[2150,76],[2050,74],[1950,72],[1850,70],[1750,68],[1650,66],[1550,64],[1450,62],[1350,60],[1310,50],[1270,40],[1230,30],[1190,20],[1150,10]], "初二女": [[2900,100],[2850,95],[2800,90],[2650,85],[2500,80],[2400,78],[2300,76],[2200,74],[2100,72],[2000,70],[1900,68],[1800,66],[1700,64],[1600,62],[1500,60],[1460,50],[1420,40],[1380,30],[1340,20],[1300,10]], "初三女": [[3050,100],[3000,95],[2950,90],[2800,85],[2650,80],[2550,78],[2450,76],[2350,74],[2250,72],[2150,70],[2050,68],[1950,66],[1850,64],[1750,62],[1650,60],[1610,50],[1570,40],[1530,30],[1490,20],[1450,10]], "高一女": [[3150,100],[3100,95],[3050,90],[2900,85],[2750,80],[2650,78],[2550,76],[2450,74],[2350,72],[2250,70],[2150,68],[2050,66],[1950,64],[1850,62],[1750,60],[1710,50],[1670,40],[1630,30],[1590,20],[1550,10]], "高二女": [[3250,100],[3200,95],[3150,90],[3000,85],[2850,80],[2750,78],[2650,76],[2550,74],[2450,72],[2350,70],[2250,68],[2150,66],[2050,64],[1950,62],[1850,60],[1810,50],[1770,40],[1730,30],[1690,20],[1650,10]], "高三女": [[3350,100],[3300,95],[3250,90],[3100,85],[2950,80],[2850,78],[2750,76],[2650,74],[2550,72],[2450,70],[2350,68],[2250,66],[2150,64],[2050,62],[1950,60],[1910,50],[1870,40],[1830,30],[1790,20],[1750,10]] },
+    run50: { "初一男": [[7.8,100],[7.9,95],[8,90],[8.1,85],[8.2,80],[8.4,78],[8.6,76],[8.8,74],[9,72],[9.2,70],[9.4,68],[9.6,66],[9.8,64],[10,62],[10.2,60],[10.4,50],[10.6,40],[10.8,30],[11,20],[11.2,10]], "初二男": [[7.5,100],[7.6,95],[7.7,90],[7.8,85],[7.9,80],[8.1,78],[8.3,76],[8.5,74],[8.7,72],[8.9,70],[9.1,68],[9.3,66],[9.5,64],[9.7,62],[9.9,60],[10.1,50],[10.3,40],[10.5,30],[10.7,20],[10.9,10]], "初三男": [[7.3,100],[7.4,95],[7.5,90],[7.6,85],[7.7,80],[7.9,78],[8.1,76],[8.3,74],[8.5,72],[8.7,70],[8.9,68],[9.1,66],[9.3,64],[9.5,62],[9.7,60],[9.9,50],[10.1,40],[10.3,30],[10.5,20],[10.7,10]], "高一男": [[7.1,100],[7.2,95],[7.3,90],[7.4,85],[7.5,80],[7.7,78],[7.9,76],[8.1,74],[8.3,72],[8.5,70],[8.7,68],[8.9,66],[9.1,64],[9.3,62],[9.5,60],[9.7,50],[9.9,40],[10.1,30],[10.3,20],[10.5,10]], "高二男": [[7,100],[7.1,95],[7.2,90],[7.3,85],[7.4,80],[7.6,78],[7.8,76],[8,74],[8.2,72],[8.4,70],[8.6,68],[8.8,66],[9,64],[9.2,62],[9.4,60],[9.6,50],[9.8,40],[10,30],[10.2,20],[10.4,10]], "高三男": [[6.8,100],[6.9,95],[7,90],[7.1,85],[7.2,80],[7.4,78],[7.6,76],[7.8,74],[8,72],[8.2,70],[8.4,68],[8.6,66],[8.8,64],[9,62],[9.2,60],[9.4,50],[9.6,40],[9.8,30],[10,20],[10.2,10]], "初一女": [[8.1,100],[8.2,95],[8.3,90],[8.6,85],[8.9,80],[9.1,78],[9.3,76],[9.5,74],[9.7,72],[9.9,70],[10.1,68],[10.3,66],[10.5,64],[10.7,62],[10.9,60],[11.1,50],[11.3,40],[11.5,30],[11.7,20],[11.9,10]], "初二女": [[8,100],[8.1,95],[8.2,90],[8.5,85],[8.8,80],[9,78],[9.2,76],[9.4,74],[9.6,72],[9.8,70],[10,68],[10.2,66],[10.4,64],[10.6,62],[10.8,60],[11,50],[11.2,40],[11.4,30],[11.6,20],[11.8,10]], "初三女": [[7.9,100],[8,95],[8.1,90],[8.4,85],[8.7,80],[8.9,78],[9.1,76],[9.3,74],[9.5,72],[9.7,70],[9.9,68],[10.1,66],[10.3,64],[10.5,62],[10.7,60],[10.9,50],[11.1,40],[11.3,30],[11.5,20],[11.7,10]], "高一女": [[7.8,100],[7.9,95],[8,90],[8.3,85],[8.6,80],[8.8,78],[9,76],[9.2,74],[9.4,72],[9.6,70],[9.8,68],[10,66],[10.2,64],[10.4,62],[10.6,60],[10.8,50],[11,40],[11.2,30],[11.4,20],[11.6,10]], "高二女": [[7.7,100],[7.8,95],[7.9,90],[8.2,85],[8.5,80],[8.7,78],[8.9,76],[9.1,74],[9.3,72],[9.5,70],[9.7,68],[9.9,66],[10.1,64],[10.3,62],[10.5,60],[10.7,50],[10.9,40],[11.1,30],[11.3,20],[11.5,10]], "高三女": [[7.6,100],[7.7,95],[7.8,90],[8.1,85],[8.4,80],[8.6,78],[8.8,76],[9,74],[9.2,72],[9.4,70],[9.6,68],[9.8,66],[10,64],[10.2,62],[10.4,60],[10.6,50],[10.8,40],[11,30],[11.2,20],[11.4,10]] },
+    sit: { "初一男": [[17.6,100],[15.9,95],[14.2,90],[12.3,85],[10.4,80],[9.1,78],[7.8,76],[6.5,74],[5.2,72],[3.9,70],[2.6,68],[1.3,66],[0,64],[-1.3,62],[-2.6,60],[-3.8,50],[-5,40],[-6.2,30],[-7.4,20],[-8.6,10]], "初二男": [[19.6,100],[17.7,95],[15.8,90],[13.7,85],[11.6,80],[10.3,78],[9,76],[7.7,74],[6.4,72],[5.1,70],[3.8,68],[2.5,66],[1.2,64],[-0.1,62],[-1.4,60],[-2.6,50],[-3.8,40],[-5,30],[-6.2,20],[-7.4,10]], "初三男": [[21.6,100],[19.7,95],[17.8,90],[15.8,85],[13.8,80],[12.4,78],[11,76],[9.6,74],[8.2,72],[6.8,70],[5.4,68],[4,66],[2.6,64],[1.2,62],[-0.2,60],[-1.4,50],[-2.6,40],[-3.8,30],[-5,20],[-6.2,10]], "高一男": [[23.6,100],[21.5,95],[19.4,90],[17.2,85],[15,80],[13.6,78],[12.2,76],[10.8,74],[9.4,72],[8,70],[6.6,68],[5.2,66],[3.8,64],[2.4,62],[1,60],[0,50],[-1,40],[-2,30],[-3,20],[-4,10]], "高二男": [[24.3,100],[22.4,95],[20.5,90],[18.3,85],[16.1,80],[14.7,78],[13.3,76],[11.9,74],[10.5,72],[9.1,70],[7.7,68],[6.3,66],[4.9,64],[3.5,62],[2.1,60],[1.1,50],[0.1,40],[-0.9,30],[-1.9,20],[-2.9,10]], "高三男": [[24.6,100],[22.8,95],[21,90],[19.1,85],[17.2,80],[15.8,78],[14.4,76],[13,74],[11.6,72],[10.2,70],[8.8,68],[7.4,66],[6,64],[4.6,62],[3.2,60],[2.2,50],[1.2,40],[0.2,30],[-0.8,20],[-1.8,10]], "初一女": [[21.8,100],[20.1,95],[18.4,90],[16.7,85],[15,80],[13.7,78],[12.4,76],[11.1,74],[9.8,72],[8.5,70],[7.2,68],[5.9,66],[4.6,64],[3.3,62],[2,60],[1.2,50],[0.4,40],[-0.4,30],[-1.2,20],[-2,10]], "初二女": [[22.7,100],[21,95],[19.3,90],[17.6,85],[15.9,80],[14.6,78],[13.3,76],[12,74],[10.7,72],[9.4,70],[8.1,68],[6.8,66],[5.5,64],[4.2,62],[2.9,60],[2.1,50],[1.3,40],[0.5,30],[-0.3,20],[-1.1,10]], "初三女": [[23.5,100],[21.8,95],[20.1,90],[18.4,85],[16.7,80],[15.4,78],[14.1,76],[12.8,74],[11.5,72],[10.2,70],[8.9,68],[7.6,66],[6.3,64],[5,62],[3.7,60],[2.9,50],[2.1,40],[1.3,30],[0.5,20],[-0.3,10]], "高一女": [[24.2,100],[22.5,95],[20.8,90],[19.1,85],[17.4,80],[16.1,78],[14.8,76],[13.5,74],[12.2,72],[10.9,70],[9.6,68],[8.3,66],[7,64],[5.7,62],[4.4,60],[3.6,50],[2.8,40],[2,30],[1.2,20],[0.4,10]], "高二女": [[24.8,100],[23.1,95],[21.4,90],[19.7,85],[18,80],[16.7,78],[15.4,76],[14.1,74],[12.8,72],[11.5,70],[10.2,68],[8.9,66],[7.6,64],[6.3,62],[5,60],[4.2,50],[3.4,40],[2.6,30],[1.8,20],[1,10]], "高三女": [[25.3,100],[23.6,95],[21.9,90],[20.2,85],[18.5,80],[17.2,78],[15.9,76],[14.6,74],[13.3,72],[12,70],[10.7,68],[9.4,66],[8.1,64],[6.8,62],[5.5,60],[4.7,50],[3.9,40],[3.1,30],[2.3,20],[1.5,10]] },
+    jump: { "初一男": [[225,100],[218,95],[211,90],[203,85],[195,80],[191,78],[187,76],[183,74],[179,72],[175,70],[171,68],[167,66],[163,64],[159,62],[155,60],[150,50],[145,40],[140,30],[135,20],[130,10]], "初二男": [[240,100],[233,95],[226,90],[218,85],[210,80],[206,78],[202,76],[198,74],[194,72],[190,70],[186,68],[182,66],[178,64],[174,62],[170,60],[165,50],[160,40],[155,30],[150,20],[145,10]], "初三男": [[250,100],[245,95],[240,90],[233,85],[225,80],[221,78],[217,76],[213,74],[209,72],[205,70],[201,68],[197,66],[193,64],[189,62],[185,60],[180,50],[175,40],[170,30],[165,20],[160,10]], "高一男": [[260,100],[255,95],[250,90],[243,85],[235,80],[231,78],[227,76],[223,74],[219,72],[215,70],[211,68],[207,66],[203,64],[199,62],[195,60],[190,50],[185,40],[180,30],[175,20],[170,10]], "高二男": [[265,100],[260,95],[255,90],[248,85],[240,80],[236,78],[232,76],[228,74],[224,72],[220,70],[216,68],[212,66],[208,64],[204,62],[200,60],[195,50],[190,40],[185,30],[180,20],[175,10]], "高三男": [[270,100],[265,95],[260,90],[253,85],[245,80],[241,78],[237,76],[233,74],[229,72],[225,70],[221,68],[217,66],[213,64],[209,62],[205,60],[200,50],[195,40],[190,30],[185,20],[180,10]], "初一女": [[196,100],[190,95],[184,90],[177,85],[170,80],[167,78],[164,76],[161,74],[158,72],[155,70],[152,68],[149,66],[146,64],[143,62],[140,60],[135,50],[130,40],[125,30],[120,20],[115,10]], "初二女": [[200,100],[194,95],[188,90],[181,85],[174,80],[171,78],[168,76],[165,74],[162,72],[159,70],[156,68],[153,66],[150,64],[147,62],[144,60],[139,50],[134,40],[129,30],[124,20],[119,10]], "初三女": [[202,100],[196,95],[190,90],[183,85],[176,80],[173,78],[170,76],[167,74],[164,72],[161,70],[158,68],[155,66],[152,64],[149,62],[146,60],[141,50],[136,40],[131,30],[126,20],[121,10]], "高一女": [[204,100],[198,95],[192,90],[185,85],[178,80],[175,78],[172,76],[169,74],[166,72],[163,70],[160,68],[157,66],[154,64],[151,62],[148,60],[143,50],[138,40],[133,30],[128,20],[123,10]], "高二女": [[205,100],[199,95],[193,90],[186,85],[179,80],[176,78],[173,76],[170,74],[167,72],[164,70],[161,68],[158,66],[155,64],[152,62],[149,60],[144,50],[139,40],[134,30],[129,20],[124,10]], "高三女": [[206,100],[200,95],[194,90],[187,85],[180,80],[177,78],[174,76],[171,74],[168,72],[165,70],[162,68],[159,66],[156,64],[153,62],[150,60],[145,50],[140,40],[135,30],[130,20],[125,10]] },
+    str: { "初一男": [[13,100],[12,95],[11,90],[10,85],[9,80],[8,76],[7,72],[6,68],[5,64],[4,60],[3,50],[2,40],[1,30]], "初二男": [[14,100],[13,95],[12,90],[11,85],[10,80],[9,76],[8,72],[7,68],[6,64],[5,60],[4,50],[3,40],[2,30],[1,20]], "初三男": [[15,100],[14,95],[13,90],[12,85],[11,80],[10,76],[9,72],[8,68],[7,64],[6,60],[5,50],[4,40],[3,30],[2,20],[1,10]], "高一男": [[16,100],[15,95],[14,90],[13,85],[12,80],[11,76],[10,72],[9,68],[8,64],[7,60],[6,50],[5,40],[4,30],[3,20],[2,10]], "高二男": [[17,100],[16,95],[15,90],[14,85],[13,80],[12,76],[11,72],[10,68],[9,64],[8,60],[7,50],[6,40],[5,30],[4,20],[3,10]], "高三男": [[18,100],[17,95],[16,90],[15,85],[14,80],[13,76],[12,72],[11,68],[10,64],[9,60],[8,50],[7,40],[6,30],[5,20],[4,10]], "初一女": [[50,100],[48,95],[46,90],[43,85],[40,80],[38,78],[36,76],[34,74],[32,72],[30,70],[28,68],[26,66],[24,64],[22,62],[20,60],[18,50],[16,40],[14,30],[12,20],[10,10]], "初二女": [[51,100],[49,95],[47,90],[44,85],[41,80],[39,78],[37,76],[35,74],[33,72],[31,70],[29,68],[27,66],[25,64],[23,62],[21,60],[19,50],[17,40],[15,30],[13,20],[11,10]], "初三女": [[52,100],[50,95],[48,90],[45,85],[42,80],[40,78],[38,76],[36,74],[34,72],[32,70],[30,68],[28,66],[26,64],[24,62],[22,60],[20,50],[18,40],[16,30],[14,20],[12,10]], "高一女": [[53,100],[51,95],[49,90],[46,85],[43,80],[41,78],[39,76],[37,74],[35,72],[33,70],[31,68],[29,66],[27,64],[25,62],[23,60],[21,50],[19,40],[17,30],[15,20],[13,10]], "高二女": [[54,100],[52,95],[50,90],[47,85],[44,80],[42,78],[40,76],[38,74],[36,72],[34,70],[32,68],[30,66],[28,64],[26,62],[24,60],[22,50],[20,40],[18,30],[16,20],[14,10]], "高三女": [[55,100],[53,95],[51,90],[48,85],[45,80],[43,78],[41,76],[39,74],[37,72],[35,70],[33,68],[31,66],[29,64],[27,62],[25,60],[23,50],[21,40],[19,30],[17,20],[15,10]] },
+    runL: { "初一男": [[235,100],[245,95],[255,90],[262,85],[270,80],[275,78],[280,76],[285,74],[290,72],[295,70],[300,68],[305,66],[310,64],[315,62],[320,60],[340,50],[360,40],[380,30],[400,20],[420,10]], "初二男": [[230,100],[235,95],[240,90],[247,85],[255,80],[260,78],[265,76],[270,74],[275,72],[280,70],[285,68],[290,66],[295,64],[300,62],[305,60],[325,50],[345,40],[365,30],[385,20],[405,10]], "初三男": [[220,100],[225,95],[230,90],[237,85],[245,80],[250,78],[255,76],[260,74],[265,72],[270,70],[275,68],[280,66],[285,64],[290,62],[295,60],[315,50],[335,40],[355,30],[375,20],[395,10]], "高一男": [[210,100],[215,95],[220,90],[227,85],[235,80],[240,78],[245,76],[250,74],[255,72],[260,70],[265,68],[270,66],[275,64],[280,62],[285,60],[305,50],[325,40],[345,30],[365,20],[385,10]], "高二男": [[205,100],[210,95],[215,90],[222,85],[230,80],[235,78],[240,76],[245,74],[250,72],[255,70],[260,68],[265,66],[270,64],[275,62],[280,60],[300,50],[320,40],[340,30],[360,20],[380,10]], "高三男": [[200,100],[205,95],[210,90],[217,85],[225,80],[230,78],[235,76],[240,74],[245,72],[250,70],[255,68],[260,66],[265,64],[270,62],[275,60],[295,50],[315,40],[335,30],[355,20],[375,10]], "初一女": [[215,100],[222,95],[229,90],[237,85],[245,80],[250,78],[255,76],[260,74],[265,72],[270,70],[275,68],[280,66],[285,64],[290,62],[295,60],[305,50],[315,40],[325,30],[335,20],[345,10]], "初二女": [[210,100],[217,95],[224,90],[232,85],[240,80],[245,78],[250,76],[255,74],[260,72],[265,70],[270,68],[275,66],[280,64],[285,62],[290,60],[300,50],[310,40],[320,30],[330,20],[340,10]], "初三女": [[205,100],[212,95],[219,90],[227,85],[235,80],[240,78],[245,76],[250,74],[255,72],[260,70],[265,68],[270,66],[275,64],[280,62],[285,60],[295,50],[305,40],[315,30],[325,20],[335,10]], "高一女": [[204,100],[210,95],[216,90],[223,85],[230,80],[235,78],[240,76],[245,74],[250,72],[255,70],[260,68],[265,66],[270,64],[275,62],[280,60],[290,50],[300,40],[310,30],[320,20],[330,10]], "高二女": [[202,100],[208,95],[214,90],[221,85],[228,80],[233,78],[238,76],[243,74],[248,72],[253,70],[258,68],[263,66],[268,64],[273,62],[278,60],[288,50],[298,40],[308,30],[318,20],[328,10]], "高三女": [[200,100],[206,95],[212,90],[219,85],[226,80],[231,78],[236,76],[241,74],[246,72],[251,70],[256,68],[261,66],[266,64],[271,62],[276,60],[286,50],[296,40],[306,30],[316,20],[326,10]] },
+    bonusRule: {
+        run: { "男": {base: 4, limit: 20}, "女": {base: 5, limit: 20} },
+        str: { "男": {base: 1, limit: 20}, "女": {base: 1, limit: 20} }
+    }
+};
+
+let GLOBAL_DATA = []; 
+let UNIQUE_CLASSES = []; 
+let CUR_CLASS_IDX = 0; 
+let SAVE_TIMER = null; 
+let WARN_LIST = []; 
+let WARN_PTR = 0;
+const STORAGE_KEY = 'TiCe_Data_vUlt_v11_FinalMerged';
+
+// ---------------------------
+// 核心逻辑函数
+// ---------------------------
+
+// 智能转换：入学年份计算
+function getEntryYearInfo(clsName) {
+    if (!clsName) return { gId: '', year: '', stage: '', num: '' };
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1; 
+    const academicYear = curMonth >= 8 ? curYear : curYear - 1;
+
+    let gId = '', offset = 0, stage = '';
+    if (clsName.includes('初一') || clsName.includes('七年级')) { gId = '21'; offset = 0; stage = '2'; }
+    else if (clsName.includes('初二') || clsName.includes('八年级')) { gId = '22'; offset = 1; stage = '2'; }
+    else if (clsName.includes('初三') || clsName.includes('九年级')) { gId = '23'; offset = 2; stage = '2'; }
+    else if (clsName.includes('高一')) { gId = '31'; offset = 0; stage = '3'; }
+    else if (clsName.includes('高二')) { gId = '32'; offset = 1; stage = '3'; }
+    else if (clsName.includes('高三')) { gId = '33'; offset = 2; stage = '3'; }
+    else { return { gId: '', year: '', stage: '', num: '' }; }
+
+    const year = academicYear - offset;
+    const match = clsName.match(/(\d+)/);
+    const n = match ? parseInt(match[0]) : 1;
+    const num = n < 10 ? '0' + n : String(n);
+
+    return { gId, year: String(year), stage, num: String(n), fullNum: num };
+}
+
+function generateSchoolIds(clsName) {
+    const info = getEntryYearInfo(clsName);
+    if (!info.year) return { gId: '', cId: '' };
+    const cId = info.year + info.stage + info.fullNum;
+    return { gId: info.gId, cId: cId };
+}
+
+function getStandardClassName(clsName) {
+    if (!clsName) return '';
+    if (clsName.includes('级')) return clsName;
+    const info = getEntryYearInfo(clsName);
+    if (!info.year) return clsName;
+    const stageName = info.stage === '2' ? '初中' : '高中';
+    return `${stageName}${info.year}级${info.num}班`;
+}
+
+function saveData() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(GLOBAL_DATA)); } catch (e) { console.error(e); } }
+function debounceSave() { if(SAVE_TIMER) clearTimeout(SAVE_TIMER); SAVE_TIMER = setTimeout(saveData, 500); }
+function loadData() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+        try {
+            GLOBAL_DATA = JSON.parse(raw);
+            if (GLOBAL_DATA.length > 0) {
+                updateUniqueClasses();
+                CUR_CLASS_IDX = 0;
+                renderTable();
+                return true;
+            }
+        } catch (e) { GLOBAL_DATA = []; }
+    }
+    return false;
+}
+
+function getSafeKey(grade, gender) {
+    if(!grade) return null;
+    const k = grade + gender;
+    if (STDS.lung[k]) return k;
+    return null; 
+}
+
+function normalizeGrade(str) {
+    if(!str) return ''; 
+    const s = String(str);
+    if(s.includes('高三')||s.includes('12')) return '高三';
+    if(s.includes('高二')||s.includes('11')) return '高二';
+    if(s.includes('高一')||s.includes('10')) return '高一';
+    if(s.includes('初三')||s.includes('9')) return '初三';
+    if(s.includes('初二')||s.includes('8')) return '初二';
+    if(s.includes('初一')||s.includes('7')) return '初一';
+    return ''; 
+}
+
+function normalizeGender(v) {
+    v = String(v).trim();
+    if(v === '2' || v.includes('女')) return '女';
+    if(v === '1' || v.includes('男')) return '男';
+    return ''; 
+}
+
+function parseTime(v) {
+    if(!v) return 0;
+    if(v < 15) { 
+        const m = Math.floor(v);
+        const s = Math.round((v-m)*100);
+        return m*60 + s;
+    }
+    return parseFloat(v); 
+}
+
+function secondsToMSS(sec) {
+    if(!sec) return '';
+    const m = Math.floor(sec / 60);
+    let s = Math.round(sec % 60);
+    if(s < 10) s = '0' + s;
+    return parseFloat(`${m}.${s}`);
+}
+
+const s2g = (s) => {
+    if(s === '-' || s === '' || s === null || s === undefined || isNaN(s)) return '';
+    const v = parseFloat(s);
+    if(v>=90) return '优秀';
+    if(v>=80) return '良好';
+    if(v>=60) return '及格';
+    return '不及格'; 
+};
+
+function calculateRowData(d) {
+    const grade = normalizeGrade(d.gc);
+    const gender = normalizeGender(d.ge);
+    const key = getSafeKey(grade, gender);
+    const isMale = gender === '男';
+
+    if ((!d.gradeId || !d.classId) && d.gc) {
+        const ids = generateSchoolIds(d.gc);
+        if(!d.gradeId) d.gradeId = ids.gId;
+        if(!d.classId) d.classId = ids.cId;
+    }
+
+    if (!key) {
+        return {
+            ...d, grade, gender, isMale,
+            res: { bmiS:'-', bmiL:'-', sLung:'-', s50:'-', sSit:'-', sJump:'-', sStr:'-', sRun:'-', bonus:'0', total:'0', g:'标准缺失', err: true }
+        };
+    }
+
+    let bmiS = 0, bmiL = '';
+    if(d.h && d.w && d.h > 0) {
+        const bmi = d.w / ((d.h/100)**2);
+        const lim = STDS.bmi[key];
+        if(lim) {
+            if(bmi <= lim[0]) { bmiL='低体重'; bmiS=80; }
+            else if(bmi <= lim[1]) { bmiL='正常'; bmiS=100; }
+            else if(bmi <= lim[2]) { bmiL='超重'; bmiS=80; }
+            else { bmiL='肥胖'; bmiS=60; }
+        }
+    }
+
+    const realGetScore = (val, table, mode) => {
+        if(val === '' || val === null || val === undefined || isNaN(parseFloat(val))) return 0;
+        val = parseFloat(val);
+        if(!table) return 0;
+        for(let i=0; i<table.length; i++) {
+            const [lim, sc] = table[i];
+            if((mode===1 && val >= lim) || (mode===-1 && val <= lim)) return sc;
+        }
+        return 0; 
+    };
+
+    const getBonus = (val, table, rule, mode) => {
+        if(!val || !table || !rule) return 0;
+        const maxStd = table[0][0];
+        let b = 0;
+        if(mode === 1 && val > maxStd) b = Math.floor((val - maxStd) / rule.base);
+        if(mode === -1 && val < maxStd) b = Math.floor((maxStd - val) / rule.base);
+        return Math.min(rule.limit, Math.max(0, b)); 
+    };
+
+    const sLung = realGetScore(d.lung, STDS.lung[key], 1);
+    const s50 = realGetScore(d.r50, STDS.run50[key], -1);
+    const sSit = realGetScore(d.sit, STDS.sit[key], 1);
+    const sJump = realGetScore(d.jump, STDS.jump[key], 1);
+
+    let sStr=0, sRun=0, bStr=0, bRun=0;
+    if(isMale) {
+        sStr = realGetScore(d.pull, STDS.str[key], 1);
+        if(sStr===100) bStr = getBonus(d.pull, STDS.str[key], STDS.bonusRule.str["男"], 1);
+        const tRun = parseTime(d.r1000);
+        sRun = tRun > 0 ? realGetScore(tRun, STDS.runL[key], -1) : 0;
+        if(sRun===100) bRun = getBonus(tRun, STDS.runL[key], STDS.bonusRule.run["男"], -1);
+    } else {
+        sStr = realGetScore(d.situp, STDS.str[key], 1);
+        if(sStr===100) bStr = getBonus(d.situp, STDS.str[key], STDS.bonusRule.str["女"], 1);
+        const tRun = parseTime(d.r800);
+        sRun = tRun > 0 ? realGetScore(tRun, STDS.runL[key], -1) : 0;
+        if(sRun===100) bRun = getBonus(tRun, STDS.runL[key], STDS.bonusRule.run["女"], -1);
+    }
+
+    const W = STDS.weights;
+    const baseScore = bmiS*W.bmi + sLung*W.lung + s50*W.run50 + sJump*W.jump + sSit*W.sit + sStr*W.str + sRun*W.runL;
+    const bonusScore = Math.min(20, bStr + bRun); 
+    const total = (baseScore + bonusScore).toFixed(1);
+    let g = '不及格';
+    if(total>=90) g='优秀'; else if(total>=80) g='良好'; else if(total>=60) g='及格';
+
+    return { 
+        ...d, grade, gender, isMale, 
+        res: { bmiS, bmiL, sLung, s50, sSit, sJump, sStr, sRun, bonus: bonusScore, total, g, err: false } 
+    };
+}
+
+function getClassRank(name) {
+    if(!name) return 999999;
+    let rank = 0;
+    if(name.includes('高')) rank += 2000;
+    else if(name.includes('初')) rank += 1000;
+    if(name.includes('三')) rank += 300;
+    else if(name.includes('二')) rank += 200;
+    else if(name.includes('一')) rank += 100;
+    const numMatch = name.match(/\d+/);
+    if(numMatch) rank += parseInt(numMatch[0]);
+    return rank;
+}
+
+function updateUniqueClasses() {
+    const classes = new Set(GLOBAL_DATA.map(d => d.gc || '未分类'));
+    UNIQUE_CLASSES = Array.from(classes).sort((a, b) => getClassRank(a) - getClassRank(b));
+    if (CUR_CLASS_IDX >= UNIQUE_CLASSES.length) CUR_CLASS_IDX = 0;
+}
+
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    if (GLOBAL_DATA.length === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('page-info').innerText = '暂无数据';
+        return;
+    }
+    updateUniqueClasses();
+    const curClass = UNIQUE_CLASSES[CUR_CLASS_IDX];
+    const pageData = GLOBAL_DATA.map((d, i) => ({...d, realIdx: i})).filter(d => (d.gc || '未分类') === curClass);
+
+    document.getElementById('page-info').innerText = `当前：${curClass} (${CUR_CLASS_IDX + 1}/${UNIQUE_CLASSES.length} 个班级)`;
+
+    const html = pageData.map(d => {
+        const r = d.res;
+        const maleDis = d.isMale ? '' : 'disabled style="background:#f9f9f9"';
+        const femDis = !d.isMale ? '' : 'disabled style="background:#f9f9f9"';
+        const cls = (sc) => sc>=90?'text-exc':(sc>=80?'text-good':(sc>=60?'text-pass':'text-fail'));
+        const warnStyle = (field) => (d.warn && d.warn[field]) ? 'class="cell-warn"' : '';
+        const runKey = d.isMale ? 'r1000' : 'r800';
+        const runWarn = (d.warn && d.warn[runKey]) ? 'class="cell-warn modified-data"' : (d.modRun ? 'class="modified-data"' : '');
+        
+        let bmiCls = '', gCls = '';
+        if (r.bmiL !== '-' && r.bmiL !== '') bmiCls = r.bmiL==='正常'?'text-bmi-norm':(r.bmiL==='肥胖'?'text-bmi-bad':'text-bmi-warn');
+        if (r.err) gCls = 'text-error';
+        else gCls = r.g==='优秀'?'text-exc':(r.g==='良好'?'text-good':(r.g==='及格'?'text-pass':'text-fail'));
+        
+        return `<tr data-idx="${d.realIdx}">
+            <td><input class="cell-input" data-f="gradeId" value="${d.gradeId||''}" placeholder="自动"></td>
+            <td><input class="cell-input" data-f="classId" value="${d.classId||''}" placeholder="自动"></td>
+            <td><input class="cell-input" data-f="gc" value="${d.gc||''}"></td>
+            <td><input class="cell-input" data-f="stuCode" value="${d.stuCode||''}"></td>
+            <td><input class="cell-input" data-f="nation" value="${d.nation||''}"></td>
+            <td><input class="cell-input" data-f="name" value="${d.name||''}"></td>
+            <td><input class="cell-input" data-f="ge" value="${d.ge||''}"></td>
+            <td><input class="cell-input" data-f="dob" value="${d.dob||''}"></td>
+            <td><input class="cell-input" data-f="addr" value="${d.addr||''}"></td>
+
+            <td ${warnStyle('h')}><input class="cell-input" type="number" data-f="h" value="${d.h||''}"></td>
+            <td ${warnStyle('w')}><input class="cell-input" type="number" data-f="w" value="${d.w||''}"></td>
+            <td ${warnStyle('lung')} class="${d.modLung?'modified-data':''}"><input class="cell-input" type="number" data-f="lung" value="${d.lung||''}"></td>
+            <td ${warnStyle('r50')} class="${d.mod50?'modified-data':''}"><input class="cell-input" type="number" data-f="r50" value="${d.r50||''}"></td>
+            <td ${warnStyle('sit')}><input class="cell-input" type="number" data-f="sit" value="${d.sit||''}"></td>
+            <td ${warnStyle('situp')}><input class="cell-input" type="number" data-f="situp" value="${d.situp||''}" ${femDis}></td>
+            <td ${warnStyle('jump')} class="${d.modJump?'modified-data':''}"><input class="cell-input" type="number" data-f="jump" value="${d.jump||''}"></td>
+            <td ${warnStyle('pull')}><input class="cell-input" type="number" data-f="pull" value="${d.pull||''}" ${maleDis}></td>
+            <td ${d.isMale?runWarn:''}><input class="cell-input" type="number" data-f="r1000" value="${d.r1000||''}" ${maleDis}></td>
+            <td ${!d.isMale?runWarn:''}><input class="cell-input" type="number" data-f="r800" value="${d.r800||''}" ${femDis}></td>
+            
+            <td class="calc-cell bg-header-score">${r.bmiS}</td>
+            <td class="bg-header-score ${bmiCls}">${r.bmiL}</td>
+            <td class="calc-cell bg-header-score">${r.sLung}</td>
+            <td class="bg-header-score ${cls(r.sLung)}">${s2g(r.sLung)}</td>
+            <td class="calc-cell bg-header-score">${r.s50}</td>
+            <td class="bg-header-score ${cls(r.s50)}">${s2g(r.s50)}</td>
+            <td class="calc-cell bg-header-score">${r.sJump}</td>
+            <td class="bg-header-score ${cls(r.sJump)}">${s2g(r.sJump)}</td>
+            <td class="calc-cell bg-header-score">${r.sSit}</td>
+            <td class="bg-header-score ${cls(r.sSit)}">${s2g(r.sSit)}</td>
+            <td class="calc-cell bg-header-score">${d.isMale?'-':r.sRun}</td>
+            <td class="bg-header-score ${!d.isMale?cls(r.sRun):''}">${d.isMale?'':s2g(r.sRun)}</td>
+            <td class="calc-cell bg-header-score">${d.isMale?r.sRun:'-'}</td>
+            <td class="bg-header-score ${d.isMale?cls(r.sRun):''}">${d.isMale?s2g(r.sRun):''}</td>
+            <td class="calc-cell bg-header-score">${d.isMale?'-':r.sStr}</td>
+            <td class="bg-header-score ${!d.isMale?cls(r.sStr):''}">${d.isMale?'':s2g(r.sStr)}</td>
+            <td class="calc-cell bg-header-score">${d.isMale?r.sStr:'-'}</td>
+            <td class="bg-header-score ${d.isMale?cls(r.sStr):''}">${d.isMale?s2g(r.sStr):''}</td>
+            <td class="bg-header-score">${r.bonus}</td>
+            <td class="text-total bg-header-score">${r.total}</td>
+            <td class="bg-header-score ${gCls}">${r.g}</td>
+            <td><button class="btn btn-red" onclick="delRow(${d.realIdx})" style="padding:2px 6px">×</button></td>
+        </tr>`;
+    }).join('');
+    tbody.innerHTML = html;
+}
+
+// ---------------------------
+// 导入导出逻辑 
+// ---------------------------
+
+// 2️⃣ 导入成绩（合并到名册）
+function importExcel(e) {
+    const f = e.target.files[0];
+    const r = new FileReader();
+    r.onload = function(ev) {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+        if(json.length<2) return;
+        
+        const h = json[0].map(s=>String(s).trim());
+        const idx = k => h.findIndex(s => s.includes(k));
+        
+        // 校验表头
+        let gcIdx = idx('班级'); if(gcIdx===-1) gcIdx=idx('年级');
+        if (gcIdx === -1) {
+            alert('❌ 导入失败：Excel中未找到【班级】列。');
+            document.getElementById('fileInput').value = '';
+            return;
+        }
+        
+        const col = { gc: gcIdx, ge: idx('性别'), na: idx('姓名'), ht: idx('身高'), wt: idx('体重'), lu: idx('肺活量'), r50: idx('50米'), st: idx('坐位'), jp: idx('跳远'), strM: idx('引体'), strF: idx('仰卧'), runM: idx('1000'), runF: idx('800') };
+
+        let matchCount = 0;
+        let newCount = 0;
+        const newRows = [];
+
+        // 遍历成绩表
+        for(let i=1; i<json.length; i++) {
+            const r = json[i];
+            if(!r.length) continue;
+            
+            const cls = r[col.gc];
+            const name = col.na > -1 ? r[col.na] : '';
+            
+            if(!cls || !name) continue;
+
+            // 核心逻辑：在现有数据中查找（按 班级 + 姓名 匹配）
+            let student = GLOBAL_DATA.find(d => d.gc === cls && d.name === name);
+
+            const scoreData = {
+                h: col.ht>-1?r[col.ht]:'', w: col.wt>-1?r[col.wt]:'', 
+                lung: col.lu>-1?r[col.lu]:'', r50: col.r50>-1?r[col.r50]:'',
+                sit: col.st>-1?r[col.st]:'', jump: col.jp>-1?r[col.jp]:'',
+                situp: col.strF>-1?r[col.strF]:'', pull: col.strM>-1?r[col.strM]:'',
+                r1000: col.runM>-1?r[col.runM]:'', r800: col.runF>-1?r[col.runF]:''
+            };
+
+            if (student) {
+                // ✅ 匹配成功：更新该学生的成绩
+                Object.assign(student, scoreData);
+                // 如果基本信息里没性别，用成绩表的补充
+                if(!student.ge && col.ge > -1) student.ge = r[col.ge];
+                // 重新计算分数
+                const idx = GLOBAL_DATA.indexOf(student);
+                GLOBAL_DATA[idx] = calculateRowData(student);
+                matchCount++;
+            } else {
+                // ⚠️ 未匹配（可能是转学生或名字写错）：作为新行添加
+                const newStudent = calculateRowData({
+                    gc: cls,
+                    name: name,
+                    ge: col.ge > -1 ? r[col.ge] : '1', // 默认男
+                    ...scoreData
+                });
+                newRows.push(newStudent);
+                newCount++;
+            }
+        }
+
+        if (newRows.length > 0) {
+            GLOBAL_DATA = GLOBAL_DATA.concat(newRows);
+        }
+
+        updateUniqueClasses();
+        renderTable();
+        saveData();
+        
+        let msg = `✅ 成绩导入完成！\n\n🔗 成功匹配并更新：${matchCount} 人`;
+        if(newCount > 0) msg += `\n➕ 新增（名册中没有）：${newCount} 人`;
+        alert(msg);
+        document.getElementById('fileInput').value = '';
+    };
+    r.readAsArrayBuffer(f);
+}
+
+// 1️⃣ 导入基本信息
+function importBasicInfo(e) {
+    const f = e.target.files[0];
+    const r = new FileReader();
+    r.onload = function(ev) {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, {header:1}); 
+        
+        if(json.length < 2) { alert("文件内容为空"); return; }
+        
+        const h = json[0].map(s => String(s).trim());
+        
+        const col = {
+            name: h.indexOf('学生姓名'),
+            code: h.indexOf('学籍号'),
+            idCard: h.indexOf('身份证件号'), 
+            ge: h.indexOf('性别'),
+            nation: h.indexOf('民族'),
+            addr: h.indexOf('家庭地址'), 
+            cls: h.indexOf('班级')
+        };
+
+        // 兼容处理
+        if(col.name === -1) col.name = h.indexOf('姓名');
+        if(col.cls === -1) col.cls = h.findIndex(s => s.includes('班级'));
+        if(col.addr === -1) col.addr = h.indexOf('家庭住址');
+
+        if(col.name === -1 || col.cls === -1) {
+            alert("❌ 错误：未找到【学生姓名】或【班级】列。");
+            document.getElementById('infoInput').value = '';
+            return;
+        }
+
+
+        const getDobFromId = (val) => {
+            if(!val) return '';
+            const id = String(val).trim();
+            if(id.length === 18) {
+                const y = id.substring(6, 10);
+                const m = id.substring(10, 12);
+                const d = id.substring(12, 14);
+                return `${y}/${m}/${d}`;
+            }
+            if(id.length === 15) {
+                const y = '19' + id.substring(6, 8);
+                const m = id.substring(8, 10);
+                const d = id.substring(10, 12);
+                return `${y}/${m}/${d}`;
+            }
+            return '';
+        };
+
+        const newData = [];
+        let count = 0;
+
+        for(let i=1; i<json.length; i++) {
+            const row = json[i];
+            const name = row[col.name];
+            const className = row[col.cls];
+            
+            if(!name || !className) continue;
+
+            const dob = col.idCard > -1 ? getDobFromId(row[col.idCard]) : '';
+            
+            const rowObj = calculateRowData({
+                gc: className,
+                name: name,
+                stuCode: col.code > -1 ? row[col.code] : '',
+                nation: col.nation > -1 ? row[col.nation] : '',
+                ge: col.ge > -1 ? row[col.ge] : '',
+                addr: col.addr > -1 ? row[col.addr] : '',
+                dob: dob,
+                h:'', w:'', lung:'', r50:'', sit:'', jump:'', situp:'', pull:'', r1000:'', r800:''
+            });
+            newData.push(rowObj);
+            count++;
+        }
+        
+        if (GLOBAL_DATA.length > 0) {
+            if (confirm(`⚠️ 系统中已有数据。\n\n点击【确定】覆盖旧数据（推荐）\n点击【取消】追加到末尾`)) {
+                GLOBAL_DATA = newData;
+            } else {
+                GLOBAL_DATA = GLOBAL_DATA.concat(newData);
+            }
+        } else {
+            GLOBAL_DATA = newData;
+        }
+
+        updateUniqueClasses();
+        CUR_CLASS_IDX = 0;
+        renderTable(); 
+        saveData();
+        alert(`✅ 名册导入成功！\n共导入 ${count} 名学生。`);
+        document.getElementById('infoInput').value = '';
+    };
+    r.readAsArrayBuffer(f);
+}
+function exportSplitClassExcel() {
+    if(!GLOBAL_DATA.length) { alert("无数据"); return; }
+    
+    const wb = XLSX.utils.book_new();
+    
+    // 1. 按班级对数据进行分组
+    const classMap = {};
+    GLOBAL_DATA.forEach(d => {
+        const cls = d.gc || '未分类';
+        if(!classMap[cls]) classMap[cls] = [];
+        classMap[cls].push(d);
+    });
+    
+    // 2. 定义格式化工具函数
+    const fmtGender = (v) => {
+        const s = String(v).trim();
+        return (s === '1' || s === '男') ? '男' : ((s === '2' || s === '女') ? '女' : v);
+    };
+    
+    // 跑步时间格式化：将 3.55 转换为 3'55
+    const fmtRun = (v) => {
+        if(!v || v === '' || v === '-') return '';
+        if(String(v).includes("'")) return v; // 如果已经是分秒格式则直接返回
+        
+        const num = parseFloat(v);
+        if(isNaN(num)) return v;
+        
+        const m = Math.floor(num);
+        let s = Math.round((num - m) * 100);
+        // 补零：如果秒数小于10，前面补0，例如 4.05 -> 4'05
+        const sStr = s < 10 ? '0' + s : s;
+        return `${m}'${sStr}`;
+    };
+
+    const header = ['班级', '姓名', '性别', '身高', '体重', '肺活量', '50米跑', '坐位体前屈', '一分钟仰卧起坐', '立定跳远', '引体向上', '1000米跑', '800米跑'];
+
+    const sortedClasses = Object.keys(classMap).sort((a,b) => getClassRank(a) - getClassRank(b));
+    
+    sortedClasses.forEach(clsName => {
+        const data = classMap[clsName];
+        
+
+        const sheetData = data.map(d => [
+            d.gc,              // 班级
+            d.name,            // 姓名
+            fmtGender(d.ge),   // 性别
+            d.h,               // 身高
+            d.w,               // 体重
+            d.lung,            // 肺活量
+            d.r50,             // 50米跑
+            d.sit,             // 坐位体前屈
+            d.situp,           // 仰卧起坐
+            d.jump,            // 立定跳远
+            d.pull,            // 引体向上
+            fmtRun(d.r1000),   // 1000米
+            fmtRun(d.r800)     // 800米
+        ]);
+        
+       
+        sheetData.unshift(header);
+        
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        
+        // 设置列宽（美化导出效果）
+        ws['!cols'] = [
+            {wch: 12}, // 班级
+            {wch: 10}, // 姓名
+            {wch: 6},  // 性别
+            {wch: 8},  // 身高
+            {wch: 8},  // 体重
+            {wch: 10}, // 肺活量
+            {wch: 10}, // 50米
+            {wch: 12}, // 坐位
+            {wch: 15}, // 仰卧
+            {wch: 10}, // 跳远
+            {wch: 10}, // 引体
+            {wch: 10}, // 1000米
+            {wch: 10}  // 800米
+        ];
+
+        // 将该班级的 Sheet 添加到工作簿
+        XLSX.utils.book_append_sheet(wb, ws, clsName);
+    });
+
+    // 导出文件
+    XLSX.writeFile(wb, '分班成绩表.xlsx');
+}
+function exportAllData() {
+    if(!GLOBAL_DATA.length) { alert("无数据"); return; }
+    
+    const wb = XLSX.utils.book_new();
+    
+    // 1. 定义民族代码表
+    const NATION_MAP = {
+        "汉族": "01", "蒙古族": "02", "回族": "03", "藏族": "04", "维吾尔族": "05", 
+        "苗族": "06", "彝族": "07", "壮族": "08", "布依族": "09", "朝鲜族": "10", 
+        "满族": "11", "侗族": "12", "瑶族": "13", "白族": "14", "土家族": "15", 
+        "哈尼族": "16", "哈萨克族": "17", "傣族": "18", "黎族": "19", "傈僳族": "20", 
+        "佤族": "21", "畲族": "22", "高山族": "23", "拉祜族": "24", "水族": "25", 
+        "东乡族": "26", "纳西族": "27", "景颇族": "28", "柯尔克孜族": "29", "土族": "30", 
+        "达斡尔族": "31", "仫佬族": "32", "羌族": "33", "布朗族": "34", "撒拉族": "35", 
+        "毛南族": "36", "仡佬族": "37", "锡伯族": "38", "阿昌族": "39", "普米族": "40", 
+        "塔吉克族": "41", "怒族": "42", "乌孜别克族": "43", "俄罗斯族": "44", "鄂温克族": "45", 
+        "德昂族": "46", "保安族": "47", "裕固族": "48", "京族": "49", "塔塔尔族": "50", 
+        "独龙族": "51", "鄂伦春族": "52", "赫哲族": "53", "门巴族": "54", "珞巴族": "55", 
+        "基诺族": "56", "其他": "57", "外国血统": "58"
+    };
+
+    // 2. 格式化工具
+    const fmtNationCode = (val) => {
+        if(!val) return '';
+        const s = String(val).trim();
+        if(/^\d+$/.test(s)) return s.padStart(2, '0');
+        return NATION_MAP[s] || s; 
+    };
+
+    const fmtGenderCode = (val) => {
+        const s = String(val).trim();
+        if(s === '男' || s === '1') return 1;
+        if(s === '女' || s === '2') return 2;
+        return val;
+    };
+    
+    const fmtTime = (val) => {
+        if(!val || val === '' || val === '-') return '';
+        const v = parseFloat(val);
+        if(isNaN(v)) return val;
+        const m = Math.floor(v);
+        let s = Math.round((v - m) * 100);
+        const sStr = s < 10 ? '0' + s : s;
+        return `${m}′${sStr}″`;
+    };
+
+    // 3. 定义表头
+    const header = [
+        "年级编号", "班级编号", "班级名称", "学籍号", "民族代码", 
+        "姓名", "性别", "出生日期", "家庭住址", 
+        "身高", "体重", "肺活量", "50米跑", "坐位体前屈", 
+        "一分钟仰卧起坐", "立定跳远", "引体向上", "1000米跑", "800米跑"
+    ];
+
+    // 4. 生成数据体
+    const body = GLOBAL_DATA.map(d => [
+        d.gradeId || '',
+        d.classId || '',
+        getStandardClassName(d.gc) || d.gc, 
+        d.stuCode || '',
+        fmtNationCode(d.nation), 
+        d.name || '',
+        fmtGenderCode(d.ge),
+        d.dob || '',
+        d.addr || '',
+        d.h, d.w, d.lung, d.r50, d.sit, d.situp, d.jump, d.pull, 
+        fmtTime(d.r1000), fmtTime(d.r800)
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+    XLSX.utils.book_append_sheet(wb, ws, "学生体质健康数据");
+    XLSX.writeFile(wb, '体测数据_合并上报版.xlsx');
+}
+
+// ---------------------------
+// 报表统计功能 
+// ---------------------------
+function getAnalysisData() {
+    const baseObj = () => ({tot:0, exc:0, good:0, pass:0, fail:0});
+    const stats = { '全校': baseObj(), '初中': baseObj(), '高中': baseObj() };
+    const itemStats = {}; 
+    const classStats = {};
+    const existGrades = new Set();
+
+    GLOBAL_DATA.forEach(d => { if (!d.res.err && d.grade) existGrades.add(d.grade); });
+
+    existGrades.forEach(g => {
+        stats[g] = baseObj();
+        itemStats[g] = { 
+            lungM:{c:0,t:0}, lungF:{c:0,t:0}, r50M:{c:0,t:0}, r50F:{c:0,t:0}, 
+            jumpM:{c:0,t:0}, jumpF:{c:0,t:0}, sitM:{c:0,t:0}, sitF:{c:0,t:0}, 
+            runM:{c:0,t:0}, runF:{c:0,t:0}, strM:{c:0,t:0}, strF:{c:0,t:0}
+        };
+    });
+
+    GLOBAL_DATA.forEach(d => {
+        if (d.res.err) return;
+        const cls = d.gc || '未知';
+        const grade = d.grade;
+        const suffix = d.isMale ? 'M' : 'F';
+        
+        if(!classStats[cls]) classStats[cls] = baseObj();
+
+        const updateStat = (o) => {
+            o.tot++;
+            const t = parseFloat(d.res.total);
+            if(t>=90) o.exc++;
+            else if(t>=80) o.good++;
+            else if(t>=60) o.pass++;
+            else o.fail++;
+        };
+
+        updateStat(stats['全校']);
+        if(stats[grade]) updateStat(stats[grade]);
+        if(classStats[cls]) updateStat(classStats[cls]);
+
+        if(grade.includes('初')) updateStat(stats['初中']);
+        if(grade.includes('高')) updateStat(stats['高中']);
+
+        const chk = (k, s) => { if(s!==null && s!=='-' && s!=='' && !isNaN(s)) { itemStats[grade][k].t++; if(s>=80) itemStats[grade][k].c++; } };
+        if(itemStats[grade]) {
+            chk('lung'+suffix, d.res.sLung); 
+            chk('r50'+suffix, d.res.s50); 
+            chk('jump'+suffix, d.res.sJump);
+            chk('sit'+suffix, d.res.sSit); 
+            chk('run'+suffix, d.res.sRun); 
+            chk('str'+suffix, d.res.sStr);
+        }
+    });
+    return { stats, itemStats, classStats, existGrades };
+}
+
+function genReport() {
+    const { stats, itemStats, classStats, existGrades } = getAnalysisData();
+    const pct = (n,t) => t ? ((n/t)*100).toFixed(1)+'%' : '0%';
+    const fmt = (n,t) => `${n} (${pct(n,t)})`;
+    const getPct = (n,t) => t ? parseFloat(((n/t)*100).toFixed(1)) : 0;
+
+    // --- 1. 全校数据汇总 (Table) ---
+    let h1 = `<table class="report-table"><tr class="report-header-blue"><th>对象</th><th>总数</th><th>优秀</th><th>优良</th><th>及格</th><th>不及格</th></tr>`;
+    const gradeOrder = ['初一','初二','初三','初中','高一','高二','高三','高中','全校'];
+    const overallChartData = { labels: [], datasets: [{label: '优良率 (%)', data: [], backgroundColor: '#217346'}] };
+    
+    gradeOrder.forEach(k => {
+        if(!stats[k] || stats[k].tot === 0) return;
+        const s = stats[k];
+        const passPct = getPct(s.exc+s.good, s.tot);
+        
+        h1 += `<tr><td>${k}</td><td>${s.tot}</td><td>${fmt(s.exc,s.tot)}</td><td>${fmt(s.exc+s.good,s.tot)}</td><td>${fmt(s.tot-s.fail,s.tot)}</td><td class="text-fail">${fmt(s.fail,s.tot)}</td></tr>`;
+        
+        overallChartData.labels.push(k);
+        overallChartData.datasets[0].data.push(passPct);
+    });
+    h1 += '</table>';
+    document.getElementById('report-overall').innerHTML = h1;
+    renderChart('chart-overall', 'bar', '各年级优良率 (%)', overallChartData, {yTitle: '优良率 (%)', max: 100});
+
+
+    // --- 2. 各项目优良率---
+    let h2 = `<table class="report-table"><tr class="report-header-blue"><th>年级</th><th>肺活量(男)</th><th>肺活量(女)</th><th>50米(男)</th><th>50米(女)</th><th>立定跳远(男)</th><th>立定跳远(女)</th><th>坐位体前屈(男)</th><th>坐位体前屈(女)</th><th>1000米</th><th>800米</th><th>引体向上</th><th>仰卧起坐</th></tr>`;
+    
+    // ⬇️ 完整数据集定义 ⬇️
+    const itemChartData = { 
+        labels: Array.from(existGrades).sort(), 
+        datasets: [
+            {label: '肺活量(男)', data: [], backgroundColor: '#00b0f0'},
+            {label: '肺活量(女)', data: [], backgroundColor: '#ffc000'},
+            {label: '50米(男)', data: [], backgroundColor: '#4caf50'},
+            {label: '50米(女)', data: [], backgroundColor: '#f44336'},
+            {label: '立定跳远(男)', data: [], backgroundColor: '#9c27b0'},
+            {label: '立定跳远(女)', data: [], backgroundColor: '#ff9800'},
+            {label: '坐位体前屈(男)', data: [], backgroundColor: '#3f51b5'},
+            {label: '坐位体前屈(女)', data: [], backgroundColor: '#009688'},
+            {label: '长跑(男-1000)', data: [], backgroundColor: '#795548'}, // 1000米
+            {label: '长跑(女-800)', data: [], backgroundColor: '#e91e63'}, // 800米
+            {label: '引体向上(男)', data: [], backgroundColor: '#607d8b'}, 
+            {label: '仰卧起坐(女)', data: [], backgroundColor: '#ffeb3b'} 
+        ]
+    };
+    
+    Array.from(existGrades).sort().forEach(g => {
+        const i = itemStats[g];
+        h2 += `<tr><td>${g}</td><td>${fmt(i.lungM.c,i.lungM.t)}</td><td>${fmt(i.lungF.c,i.lungF.t)}</td><td>${fmt(i.r50M.c,i.r50M.t)}</td><td>${fmt(i.r50F.c,i.r50F.t)}</td><td>${fmt(i.jumpM.c,i.jumpM.t)}</td><td>${fmt(i.jumpF.c,i.jumpF.t)}</td><td>${fmt(i.sitM.c,i.sitM.t)}</td><td>${fmt(i.sitF.c,i.sitF.t)}</td><td>${fmt(i.runM.c,i.runM.t)}</td><td>${fmt(i.runF.c,i.runF.t)}</td><td>${fmt(i.strM.c,i.strM.t)}</td><td>${fmt(i.strF.c,i.strF.t)}</td></tr>`;
+        
+        // 填充图表数据
+        itemChartData.datasets[0].data.push(getPct(i.lungM.c,i.lungM.t));
+        itemChartData.datasets[1].data.push(getPct(i.lungF.c,i.lungF.t));
+        itemChartData.datasets[2].data.push(getPct(i.r50M.c,i.r50M.t));
+        itemChartData.datasets[3].data.push(getPct(i.r50F.c,i.r50F.t));
+        itemChartData.datasets[4].data.push(getPct(i.jumpM.c,i.jumpM.t));
+        itemChartData.datasets[5].data.push(getPct(i.jumpF.c,i.jumpF.t));
+        itemChartData.datasets[6].data.push(getPct(i.sitM.c,i.sitM.t));
+        itemChartData.datasets[7].data.push(getPct(i.sitF.c,i.sitF.t));
+        itemChartData.datasets[8].data.push(getPct(i.runM.c,i.runM.t)); // 1000米
+        itemChartData.datasets[9].data.push(getPct(i.runF.c,i.runF.t)); // 800米
+        itemChartData.datasets[10].data.push(getPct(i.strM.c,i.strM.t)); // 引体向上
+        itemChartData.datasets[11].data.push(getPct(i.strF.c,i.strF.t)); // 仰卧起坐
+    });
+    h2 += '</table>';
+    document.getElementById('report-items').innerHTML = h2;
+    renderChart('chart-items', 'bar', '各项目优良率对比 (%)', itemChartData, {yTitle: '优良率 (%)', max: 100});
+
+    // --- 3. 班级详情分析 ---
+    let h3 = `<table class="report-table"><tr class="report-header-blue"><th>班级</th><th>总数</th><th>优良率</th><th>及格率</th><th>不及格</th></tr>`;
+    const classChartData = { 
+        labels: [], 
+        datasets: [
+            {label: '优良率 (%)', data: [], backgroundColor: '#9c27b0'},
+            {label: '不及格率 (%)', data: [], backgroundColor: '#f44336'}
+        ] 
+    };
+    
+    Object.keys(classStats).sort((a,b)=>getClassRank(a)-getClassRank(b)).forEach(c => {
+        const s = classStats[c];
+        const goodPassPct = getPct(s.exc+s.good, s.tot);
+        const failPct = getPct(s.fail, s.tot);
+
+        h3 += `<tr><td>${c}</td><td>${s.tot}</td><td>${fmt(s.exc+s.good,s.tot)}</td><td>${fmt(s.tot-s.fail,s.tot)}</td><td class="${s.fail>0?'text-fail':''}">${fmt(s.fail,s.tot)}</td></tr>`;
+        
+        classChartData.labels.push(c);
+        classChartData.datasets[0].data.push(goodPassPct);
+        classChartData.datasets[1].data.push(failPct);
+    });
+    h3 += '</table>';
+    document.getElementById('report-class').innerHTML = h3;
+    renderChart('chart-class', 'bar', '各班级优良率与不及格率 (%)', classChartData, {yTitle: '百分比 (%)', max: 100});
+}
+
+
+let myCharts = {};
+
+
+function renderChart(canvasId, type, titleText, data, options = {}) {
+    const ctx = document.getElementById(canvasId);
+    
+  
+    if (myCharts[canvasId]) {
+        myCharts[canvasId].destroy();
+    }
+    
+    const config = {
+        type: type,
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: titleText,
+                    font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                     callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            label += context.parsed.y + '%';
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '对象/班级'
+                    },
+                    
+                    ticks: {
+                        autoSkip: false
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: options.max || undefined,
+                    title: {
+                        display: true,
+                        text: options.yTitle || '百分比'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + "%" 
+                        }
+                    }
+                }
+            }
+        }
+    };
+    
+    myCharts[canvasId] = new Chart(ctx, config);
+}
+
+// ---------------------------
+// 导出统计报告功能
+// ---------------------------
+function exportAnalysisExcel() {
+    if (!GLOBAL_DATA.length) { alert("无数据"); return; }
+    
+    const { stats, itemStats, classStats, existGrades } = getAnalysisData();
+    const wb = XLSX.utils.book_new();
+
+    // 格式化工具函数 
+    const pct = (n,t) => t ? ((n/t)*100).toFixed(1)+'%' : '0%';
+    const fmt = (n,t) => `${n} (${pct(n,t)})`;
+
+    // --- Sheet 1: 全校汇总 ---
+    const s1 = [['对象','总数','优秀','优良','及格','不及格']];
+    const gradeOrder = ['初一','初二','初三','初中','高一','高二','高三','高中','全校'];
+    gradeOrder.forEach(k => {
+        if(!stats[k] || stats[k].tot === 0) return;
+        const s = stats[k];
+        s1.push([k, s.tot, fmt(s.exc,s.tot), fmt(s.exc+s.good,s.tot), fmt(s.tot-s.fail,s.tot), fmt(s.fail,s.tot)]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "全校汇总");
+
+    // --- Sheet 2: 各项目优良率 ---
+    const s2 = [['年级','肺活量(男)','肺活量(女)','50米(男)','50米(女)','跳远(男)','跳远(女)','坐位(男)','坐位(女)','1000米','800米','引体','仰卧']];
+    Array.from(existGrades).sort().forEach(g => {
+        const i = itemStats[g];
+        s2.push([
+            g, 
+            fmt(i.lungM.c,i.lungM.t), fmt(i.lungF.c,i.lungF.t), 
+            fmt(i.r50M.c,i.r50M.t), fmt(i.r50F.c,i.r50F.t), 
+            fmt(i.jumpM.c,i.jumpM.t), fmt(i.jumpF.c,i.jumpF.t), 
+            fmt(i.sitM.c,i.sitM.t), fmt(i.sitF.c,i.sitF.t), 
+            fmt(i.runM.c,i.runM.t), fmt(i.runF.c,i.runF.t), 
+            fmt(i.strM.c,i.strM.t), fmt(i.strF.c,i.strF.t)
+        ]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), "各项目优良率");
+
+    // --- Sheet 3: 班级详情 ---
+    const s3 = [['班级','总数','优良率','及格率','不及格']];
+    Object.keys(classStats).sort((a,b)=>getClassRank(a)-getClassRank(b)).forEach(c => {
+        const s = classStats[c];
+        s3.push([c, s.tot, pct(s.exc+s.good,s.tot), pct(s.tot-s.fail,s.tot), pct(s.fail,s.tot)]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), "班级详情");
+    XLSX.writeFile(wb, '体测分析报告.xlsx');
+}
+// ---------------------------
+// 智能纠错与定位功能
+// ---------------------------
+function runSmartCheck() {
+    let fixCount = 0;
+    WARN_LIST = []; 
+    
+    const cleanUnit = (val) => {
+        if(!val) return val;
+        let s = String(val).trim();
+        s = s.replace(/['"”’‘：:]/g, '.');
+        s = s.replace(/[^\d.-]/g, '');
+        return s === '' ? val : parseFloat(s);
+    };
+
+    GLOBAL_DATA.forEach((d, i) => {
+        let modified = false;
+        
+        ['h','w','lung','r50','sit','jump','situp','pull','r1000','r800'].forEach(k => {
+            const clean = cleanUnit(d[k]);
+            if(clean !== d[k]) { d[k] = clean; modified = true; }
+        });
+
+        // 1. 身高智能修正
+        let h = parseFloat(d.h);
+        if (!isNaN(h)) {
+            if (h > 0 && h < 3) { h *= 100; modified = true; }
+            else if (h > 10 && h < 25) { h *= 10; modified = true; }
+            if (modified) d.h = parseFloat(h.toFixed(1));
+        }
+
+        // 2. 体重智能修正
+        let w = parseFloat(d.w);
+        if (!isNaN(w)) {
+            let wMod = false;
+            if (w > 200) { w /= 10; wMod = true; }
+            if (wMod) { d.w = parseFloat(w.toFixed(1)); modified = true; }
+        }
+
+        // 3. 50米跑智能修正
+        let r50 = parseFloat(d.r50);
+        if (!isNaN(r50)) {
+            let r50Mod = false;
+            if (r50 > 100) { r50 /= 100; r50Mod = true; }
+            else if (r50 > 20) { r50 /= 10; r50Mod = true; }
+            if (r50Mod) { d.r50 = parseFloat(r50.toFixed(2)); modified = true; }
+        }
+
+        // 4. 立定跳远智能修正
+        let jump = parseFloat(d.jump);
+        if (!isNaN(jump)) {
+            let jMod = false;
+            if (jump > 0 && jump < 4) { jump *= 100; jMod = true; }
+            else if (jump >= 4 && jump < 40) { jump *= 10; jMod = true; }
+            if (jMod) { d.jump = Math.round(jump); modified = true; }
+        }
+
+        // 5. 中长跑格式修正 (强制转为 m.ss)
+        const runKey = d.isMale ? 'r1000' : 'r800';
+        let rVal = parseFloat(d[runKey]);
+        if(!isNaN(rVal)) {
+            let rMod = false;
+            // 规则A: 3位数无小数点 (425 -> 4.25)
+            if (rVal >= 100 && !String(d[runKey]).includes('.')) { 
+                rVal = rVal / 100; rMod = true; 
+            }
+            // 规则B: 看起来是秒数 (比如 252秒 -> 4.12)
+            // 范围判断：151秒(2m31s) 到 415秒(6m55s)
+            else if (rVal >= 60 && rVal <= 600) {
+                // 如果在合理秒数范围内，且看起来不像 m.ss (比如 4.12)
+                // 4.12 < 15, 所以 >=60 的肯定是秒
+                d[runKey] = secondsToMSS(rVal); // 转换回 4.12
+                rMod = false; modified = true; // 直接改了，不用下面的 float fix
+            }
+            
+            if(rMod) { d[runKey] = parseFloat(rVal.toFixed(2)); modified = true; }
+        }
+        
+        if(modified) {
+            GLOBAL_DATA[i] = calculateRowData(d);
+            fixCount++;
+        }
+        
+        d.warn = {};
+        let hasWarn = false;
+        
+        if(d.lung && (d.lung < 500 || d.lung > 7000)) { d.warn.lung = true; hasWarn = true; }
+        if(d.jump && (d.jump < 100 || d.jump > 320)) { d.warn.jump = true; hasWarn = true; }
+        if(d.sit !== '' && (parseFloat(d.sit) < -15 || parseFloat(d.sit) > 40)) { d.warn.sit = true; hasWarn = true; }
+        if(d.r50 && (d.r50 < 5.5 || d.r50 > 16)) { d.warn.r50 = true; hasWarn = true; }
+        if(d.situp && (d.situp < 3 || d.situp > 70)) { d.warn.situp = true; hasWarn = true; }
+        if(d.pull !== '' && (parseFloat(d.pull) < 0 || parseFloat(d.pull) > 40)) { d.warn.pull = true; hasWarn = true; }
+        
+        // 跑步检测：必须在 2.31 - 6.55 之间
+        const rV = parseFloat(d[runKey]);
+        if(rV) {
+            if(rV < 2.31 || rV > 6.55) { d.warn[runKey] = true; hasWarn = true; }
+        }
+
+        if(hasWarn) {
+            WARN_LIST.push(i); 
+        }
+    });
+    
+    renderTable();
+    saveData();
+    
+    const navBtn = document.getElementById('btnWarnNav');
+    if(WARN_LIST.length > 0) {
+        WARN_PTR = 0;
+        navBtn.style.display = 'inline-flex';
+        navBtn.innerText = `⚠️ 定位异常 (1/${WARN_LIST.length})`;
+        alert(`智能校验完成！\n✅ 修复了 ${fixCount} 处格式错误（已统一为 m.ss）。\n⚠️ 发现了 ${WARN_LIST.length} 个不在标准范围内的数据。`);
+    } else {
+        navBtn.style.display = 'none';
+        alert(`完美！\n✅ 修复了 ${fixCount} 处格式错误。\n所有数据均在合理范围内。`);
+    }
+}
+
+function scrollToNextWarn() {
+    if(WARN_LIST.length === 0) return;
+    
+    const globalIdx = WARN_LIST[WARN_PTR];
+    const targetData = GLOBAL_DATA[globalIdx];
+    const targetClass = targetData.gc || '未分类';
+    
+    updateUniqueClasses();
+    const classIdx = UNIQUE_CLASSES.indexOf(targetClass);
+    if(classIdx !== -1 && classIdx !== CUR_CLASS_IDX) {
+        CUR_CLASS_IDX = classIdx;
+        renderTable();
+    }
+    
+    setTimeout(() => {
+        const tr = document.querySelector(`tr[data-idx="${globalIdx}"]`);
+        if(tr) {
+            tr.scrollIntoView({behavior: "smooth", block: "center"});
+            tr.classList.add('row-focus-error');
+            setTimeout(() => tr.classList.remove('row-focus-error'), 3000);
+        }
+    }, 100);
+
+    WARN_PTR = (WARN_PTR + 1) % WARN_LIST.length;
+    document.getElementById('btnWarnNav').innerText = `⚠️ 定位异常 (${WARN_PTR + 1}/${WARN_LIST.length})`;
+}
+// ---------------------------
+// 黑科技逻辑 
+// ---------------------------
+function openOptimizeDialog() {
+    const rate = prompt("请输入全校目标优良率（%）\n例如输入 85 代表目标是让全校优良率达到 85%", "85");
+    if(rate) autoOptimize(parseFloat(rate));
+}
+
+function autoOptimize(targetRate) {
+    if(!GLOBAL_DATA.length) return;
+    
+    // 1. 年级优先级定义
+    const gradePriority = { '高三':0, '初三':1, '高二':2, '初二':3, '高一':4, '初一':5 };
+    
+    const getGradeScore = (d) => {
+        const gc = d.gc || '';
+        for(let g in gradePriority) if(gc.includes(g)) return gradePriority[g];
+        return 99; 
+    };
+
+    // 2. 筛选全校范围内的所有“潜力股” (75 <= 分数 < 80)
+    // 注意：这里不再按班级循环，而是提取全校所有符合条件的人
+    let candidates = GLOBAL_DATA.map((d, index) => ({ data: d, index: index })) // 保留原始索引
+        .filter(item => {
+            const t = parseFloat(item.data.res.total);
+            return !item.data.res.err && t < 80 && t >= 75; // 严格限定 75-79.9
+        });
+
+    // 3. 对潜力股进行全局排序
+    // 规则A: 年级优先级 (高三优先)
+    // 规则B: 分数从高到低 (79.9优先，改动最小)
+    candidates.sort((a, b) => {
+        const gradeScoreA = getGradeScore(a.data);
+        const gradeScoreB = getGradeScore(b.data);
+        if(gradeScoreA !== gradeScoreB) return gradeScoreA - gradeScoreB;
+        
+        return parseFloat(b.data.res.total) - parseFloat(a.data.res.total);
+    });
+
+    // 4. 计算当前全校优良率
+    const calcGlobalRate = () => {
+        const totalCount = GLOBAL_DATA.length;
+        if(totalCount === 0) return 0;
+        const goodCount = GLOBAL_DATA.filter(d => parseFloat(d.res.total) >= 80).length;
+        return (goodCount / totalCount) * 100;
+    };
+
+    let totalModified = 0;
+
+    // 5. 开始全局循环优化
+    for(let item of candidates) {
+        if(calcGlobalRate() >= targetRate) {
+            break; 
+        }
+
+        const idx = item.index; 
+        const currentD = GLOBAL_DATA[idx];
+        let isModified = false;
+
+        const modifyPipeline = [
+            {
+                key: 'r50',
+                action: () => {
+                    if(currentD.r50) {
+                        let reduction = (Math.random() * 0.4 + 0.1); 
+                        currentD.r50 = (parseFloat(currentD.r50) - reduction).toFixed(2);
+                        currentD.mod50 = true;
+                        return true;
+                    }
+                    return false;
+                }
+            },
+            {
+                key: 'run',
+                action: () => {
+                    const runKey = currentD.isMale ? 'r1000' : 'r800';
+                    if (currentD[runKey] && currentD[runKey] > 0) {
+                        // 统一转为秒进行计算
+                        let t = parseTime(currentD[runKey]);
+                        // 减少1-20秒 (即0.01-0.20分)
+                        let reduction = Math.floor(Math.random() * 20) + 1; 
+                        t = Math.max(180, t - reduction);
+                        
+                        // 强制转回 m.ss 格式存储 (如 4.12)
+                        currentD[runKey] = secondsToMSS(t);
+                        
+                        currentD.modRun = true;
+                        return true;
+                    }
+                    return false;
+                }
+            },
+            {
+                key: 'lung',
+                action: () => {
+                    if (currentD.lung) {
+                        let increase = Math.floor(Math.random() * 400) + 100; 
+                        currentD.lung = Math.round(parseFloat(currentD.lung) + increase);
+                        currentD.modLung = true;
+                        return true;
+                    }
+                    return false;
+                }
+            },
+            {
+                key: 'jump',
+                action: () => {
+                    if (currentD.jump) {
+                        let increase = Math.floor(Math.random() * 10) + 5; 
+                        currentD.jump = Math.round(parseFloat(currentD.jump) + increase);
+                        currentD.modJump = true;
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        ];
+
+        for (let step of modifyPipeline) {
+            if(step.action()) {
+                isModified = true;
+                GLOBAL_DATA[idx] = calculateRowData(currentD);
+            
+                if(parseFloat(GLOBAL_DATA[idx].res.total) >= 80) {
+                    break; 
+                }
+            }
+        }
+
+        if(isModified) {
+            totalModified++;
+            GLOBAL_DATA[idx].modified = true;
+        }
+    }
+
+    renderTable();
+    saveData();
+    alert(`全校优化完成！\n共微调了 ${totalModified} 人。\n当前全校优良率：${calcGlobalRate().toFixed(2)}%`);
+}
+
+function scrollToNextWarn() {
+    if(WARN_LIST.length === 0) return;
+    const globalIdx = WARN_LIST[WARN_PTR];
+    const targetData = GLOBAL_DATA[globalIdx];
+    const targetClass = targetData.gc || '未分类';
+    updateUniqueClasses();
+    const classIdx = UNIQUE_CLASSES.indexOf(targetClass);
+    if(classIdx !== -1 && classIdx !== CUR_CLASS_IDX) {
+        CUR_CLASS_IDX = classIdx;
+        renderTable();
+    }
+    setTimeout(() => {
+        const tr = document.querySelector(`tr[data-idx="${globalIdx}"]`);
+        if(tr) {
+            tr.scrollIntoView({behavior: "smooth", block: "center"});
+            tr.classList.add('row-focus-error');
+            setTimeout(() => tr.classList.remove('row-focus-error'), 3000);
+        }
+    }, 100);
+    WARN_PTR = (WARN_PTR + 1) % WARN_LIST.length;
+    document.getElementById('btnWarnNav').innerText = `⚠️ 定位异常 (${WARN_PTR + 1}/${WARN_LIST.length})`;
+}
+
+// ---------------------------
+// 交互与其他
+// ---------------------------
+
+function deleteCurrentClass() {
+    if (UNIQUE_CLASSES.length === 0) return;
+    const curClass = UNIQUE_CLASSES[CUR_CLASS_IDX];
+    
+    if (!confirm(`⚠️ 高危操作 warning ⚠️\n\n你确定要删除【${curClass}】的所有数据吗？\n\n删除后不可恢复！`)) return;
+    
+    const oldLen = GLOBAL_DATA.length;
+    GLOBAL_DATA = GLOBAL_DATA.filter(d => (d.gc || '未分类') !== curClass);
+    const newLen = GLOBAL_DATA.length;
+    const deletedCount = oldLen - newLen;
+
+    updateUniqueClasses();
+    CUR_CLASS_IDX = 0; 
+    renderTable();
+    saveData();
+    
+    alert(`操作成功！\n已删除【${curClass}】共 ${deletedCount} 条数据。`);
+}
+
+function changeClass(delta) {
+    if (UNIQUE_CLASSES.length === 0) return;
+    CUR_CLASS_IDX += delta;
+    if (CUR_CLASS_IDX < 0) CUR_CLASS_IDX = UNIQUE_CLASSES.length - 1;
+    if (CUR_CLASS_IDX >= UNIQUE_CLASSES.length) CUR_CLASS_IDX = 0;
+    renderTable();
+}
+
+document.getElementById('tableBody').addEventListener('input', function(e) {
+    if(e.target.tagName === 'INPUT') {
+        const input = e.target;
+        const tr = input.closest('tr');
+        const idx = parseInt(tr.dataset.idx); 
+        const field = input.dataset.f;
+        
+        // 1. 更新数据模型
+        GLOBAL_DATA[idx][field] = input.value;
+        if(GLOBAL_DATA[idx].warn) GLOBAL_DATA[idx].warn[field] = false;
+        
+        // 2. 只有涉及计算的字段才触发重算
+        if(['h','w','lung','r50','sit','jump','situp','pull','r1000','r800','ge','gc'].includes(field)) {
+             GLOBAL_DATA[idx] = calculateRowData(GLOBAL_DATA[idx]);
+             
+             if (field === 'ge' || field === 'gc') {
+                 renderTable();
+                 const newTr = document.querySelector(`tr[data-idx="${idx}"]`);
+                 if(newTr) {
+                     const newInput = newTr.querySelector(`input[data-f="${field}"]`);
+                     if(newInput) { newInput.focus(); }
+                 }
+             } else {
+                 updateRowDisplay(tr, GLOBAL_DATA[idx]);
+             }
+        }
+        
+        debounceSave();
+    }
+});
+
+function updateRowDisplay(tr, d) {
+    if(!tr || !d) return;
+    const r = d.res;
+    const cls = (sc) => sc>=90?'text-exc':(sc>=80?'text-good':(sc>=60?'text-pass':'text-fail'));
+    const s2g = (s) => {
+        if(s === '-' || s === '' || s === null || s === undefined || isNaN(s)) return '';
+        const v = parseFloat(s);
+        if(v>=90) return '优秀';
+        if(v>=80) return '良好';
+        if(v>=60) return '及格';
+        return '不及格'; 
+    };
+
+    const setCell = (idx, text, className) => {
+        if(tr.cells[idx]) {
+            tr.cells[idx].innerText = text;
+            tr.cells[idx].className = 'bg-header-score ' + className;
+        }
+    };
+    
+    // BMI (Col 19, 20)
+    let bmiCls = r.bmiL==='正常'?'text-bmi-norm':(r.bmiL==='肥胖'?'text-bmi-bad':'text-bmi-warn');
+    if (r.bmiL === '-' || r.bmiL === '') bmiCls = '';
+    tr.cells[19].innerText = r.bmiS;
+    tr.cells[20].innerText = r.bmiL;
+    tr.cells[20].className = 'bg-header-score ' + bmiCls;
+
+    // 肺活量 (Col 21, 22)
+    setCell(21, r.sLung, 'calc-cell');
+    setCell(22, s2g(r.sLung), cls(r.sLung));
+
+    // 50米 (Col 23, 24)
+    setCell(23, r.s50, 'calc-cell');
+    setCell(24, s2g(r.s50), cls(r.s50));
+
+    // 跳远 (Col 25, 26)
+    setCell(25, r.sJump, 'calc-cell');
+    setCell(26, s2g(r.sJump), cls(r.sJump));
+
+    // 坐位 (Col 27, 28)
+    setCell(27, r.sSit, 'calc-cell');
+    setCell(28, s2g(r.sSit), cls(r.sSit));
+
+    // 800米 (Col 29, 30) - 女生
+    setCell(29, d.isMale ? '-' : r.sRun, 'calc-cell');
+    setCell(30, d.isMale ? '' : s2g(r.sRun), !d.isMale ? cls(r.sRun) : '');
+
+    // 1000米 (Col 31, 32) - 男生
+    setCell(31, d.isMale ? r.sRun : '-', 'calc-cell');
+    setCell(32, d.isMale ? s2g(r.sRun) : '', d.isMale ? cls(r.sRun) : '');
+
+    // 仰卧 (Col 33, 34) - 女生
+    setCell(33, d.isMale ? '-' : r.sStr, 'calc-cell');
+    setCell(34, d.isMale ? '' : s2g(r.sStr), !d.isMale ? cls(r.sStr) : '');
+
+    // 引体 (Col 35, 36) - 男生
+    setCell(35, d.isMale ? r.sStr : '-', 'calc-cell');
+    setCell(36, d.isMale ? s2g(r.sStr) : '', d.isMale ? cls(r.sStr) : '');
+
+    // 附加分 (Col 37)
+    tr.cells[37].innerText = r.bonus;
+
+    // 总分 (Col 38)
+    tr.cells[38].innerText = r.total;
+
+    // 等级 (Col 39)
+    let gCls = r.err ? 'text-error' : (r.g==='优秀'?'text-exc':(r.g==='良好'?'text-good':(r.g==='及格'?'text-pass':'text-fail')));
+    tr.cells[39].innerText = r.g;
+    tr.cells[39].className = 'bg-header-score ' + gCls;
+}
+
+function addNewRow() {
+    GLOBAL_DATA.push(calculateRowData({})); 
+    renderTable();
+    saveData();
+}
+
+function delRow(idx) {
+    if(confirm('删除此行?')) { GLOBAL_DATA.splice(idx, 1); renderTable(); saveData();}
+}
+function clearTable() {
+    if(confirm('确定清空?')) { GLOBAL_DATA = []; UNIQUE_CLASSES = []; CUR_CLASS_IDX = 0; renderTable(); localStorage.removeItem(STORAGE_KEY); }
+}
+function switchView(v) {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('tab-'+v).classList.add('active');
+    document.getElementById('view-data').style.display = v==='data'?'block':'none';
+    document.getElementById('view-report').style.display = v==='report'?'block':'none';
+    document.querySelector('.pagination').style.display = v==='data'?'flex':'none'; 
+    if(v==='report') genReport();
+}
+
+let sh = ''; 
+for(let i=0; i<9; i++) sh += '<th class="bg-header-score col-w-xs">得分</th><th class="bg-header-score col-w-xs">等级</th>';
+document.getElementById('subHeader').innerHTML = sh;
+
+loadData();
+
+// 检查登录状态
+(function checkLoginStatus() {
+    const session = sessionStorage.getItem(REMOTE_CONFIG.sessionKey);
+    if (session) {
+        try {
+            const user = JSON.parse(session);
+            // 简单检查用户对象是否有效
+            if (user && user.id && user.name) {
+                // 如果 session 有效，直接登录
+                loginSuccess(user);
+                return;
+            }
+        } catch (e) {
+            console.error("Session解析失败", e);
+        }
+    }
+    // 如果没有有效 session，则显示登录屏幕
+    document.getElementById('login-screen').style.display = 'flex';
+})();
+</script>
+</body>
+</html>
