@@ -609,8 +609,12 @@ const fmtTimeExport = (val) => {
 };
 const s2g = (s) => { if(!s && s!==0) return ''; const v=parseFloat(s); return v>=90?'优秀':(v>=80?'良好':(v>=60?'及格':'不及格')); };
 
+// 核心计算函数 (已修复：优先使用导入的“年级”列计算分数)
 function calculateRowData(d) {
-    const grade = normalizeGrade(d.gc);
+    // 逻辑变更：如果有导入的指定年级(customGrade)，则优先使用它；否则使用班级名称(gc)去推算
+    const gradeInput = d.customGrade || d.gc; 
+    const grade = normalizeGrade(gradeInput);
+    
     const gender = normalizeGender(d.ge);
     const key = getSafeKey(grade, gender);
     const isMale = gender === '男';
@@ -628,33 +632,17 @@ function calculateRowData(d) {
         };
     }
 
-let bmiS = 0, bmiL = '';
-if(d.h && d.w && d.h > 0) {
-    // 核心修改：使用 toFixed(1) 实现标准四舍五入
-    // 这样：16.84 -> 16.8 (低体重)
-    //       16.85 -> 16.9 (正常)
-    //       23.24 -> 23.2 (正常)
-    //       23.25 -> 23.3 (超重)
-    const bmi = parseFloat((d.w / ((d.h / 100) ** 2)).toFixed(1));
-    
-    const lim = STDS.bmi[key]; // 高二女标准为 [16.8, 23.2, 25.4]
-    if(lim) {
-        // 判定逻辑统一使用四舍五入后的 bmi 值
-        if(bmi <= lim[0]) { 
-            bmiL = '低体重'; 
-            bmiS = 80; 
-        } else if(bmi <= lim[1]) { 
-            bmiL = '正常'; 
-            bmiS = 100; 
-        } else if(bmi <= lim[2]) { 
-            bmiL = '超重'; 
-            bmiS = 80; 
-        } else { 
-            bmiL = '肥胖'; 
-            bmiS = 60; 
+    let bmiS = 0, bmiL = '';
+    if(d.h && d.w && d.h > 0) {
+        const bmi = parseFloat((d.w / ((d.h / 100) ** 2)).toFixed(1));
+        const lim = STDS.bmi[key]; 
+        if(lim) {
+            if(bmi <= lim[0]) { bmiL = '低体重'; bmiS = 80; } 
+            else if(bmi <= lim[1]) { bmiL = '正常'; bmiS = 100; } 
+            else if(bmi <= lim[2]) { bmiL = '超重'; bmiS = 80; } 
+            else { bmiL = '肥胖'; bmiS = 60; }
         }
     }
-}
 
     const realGetScore = (val, table, mode) => {
         if(val === '' || val === null || val === undefined || isNaN(parseFloat(val))) return 0;
@@ -666,29 +654,18 @@ if(d.h && d.w && d.h > 0) {
         }
         return 0; 
     };
-// 修正版：通过查表法计算非线性附加分
-const getBonus = (val, table, ruleArr, mode) => {
-    if(!val || !table || !ruleArr || !Array.isArray(ruleArr)) return 0;
-    
-    // 获取 100 分的标准值
-    const maxStd = table[0][0];
-    
-    // 计算当前成绩与满分标准的差值
-    const diff = (mode === 1) ? (val - maxStd) : (maxStd - val);
-    
-    // 如果未达到满分标准，附加分为 0
-    if (diff <= 0) return 0;
-    
-    // 从高到低匹配对应的分值 (10分到1分)
-    let points = 0;
-    for (let i = ruleArr.length - 1; i >= 0; i--) {
-        if (diff >= ruleArr[i]) {
-            points = i + 1;
-            break;
+
+    const getBonus = (val, table, ruleArr, mode) => {
+        if(!val || !table || !ruleArr || !Array.isArray(ruleArr)) return 0;
+        const maxStd = table[0][0];
+        const diff = (mode === 1) ? (val - maxStd) : (maxStd - val);
+        if (diff <= 0) return 0;
+        let points = 0;
+        for (let i = ruleArr.length - 1; i >= 0; i--) {
+            if (diff >= ruleArr[i]) { points = i + 1; break; }
         }
-    }
-    return points; 
-};
+        return points; 
+    };
 
     const sLung = realGetScore(d.lung, STDS.lung[key], 1);
     const s50 = realGetScore(d.r50, STDS.run50[key], -1);
@@ -723,6 +700,7 @@ const getBonus = (val, table, ruleArr, mode) => {
     };
 }
 
+
 function getClassRank(name) {
     if(!name) return 999999;
     let rank = 0;
@@ -742,6 +720,7 @@ function updateUniqueClasses() {
     if (CUR_CLASS_IDX >= UNIQUE_CLASSES.length) CUR_CLASS_IDX = 0;
 }
 
+// 核心修复：给 delRow 添加第二个参数 'data'
 function renderTable() {
     const tbody = document.getElementById('tableBody');
     if (GLOBAL_DATA.length === 0) {
@@ -781,7 +760,6 @@ function renderTable() {
         if (r.err) gCls = 'text-error';
         else gCls = r.g==='优秀'?'text-exc':(r.g==='良好'?'text-good':(r.g==='及格'?'text-pass':'text-fail'));
         
-        // 核心修复：使用 (val === 0 || val) ? val : '' 来确保 0 能正常显示
         const fv = (v) => (v === 0 || v) ? v : '';
 
         return `<tr data-idx="${d.realIdx}">
@@ -827,7 +805,8 @@ function renderTable() {
             <td class="bg-header-score">${fv(r.bonus)}</td>
             <td class="text-total bg-header-score">${fv(r.total)}</td>
             <td class="bg-header-score ${gCls}">${fv(r.g)}</td>
-            <td><button class="btn btn-red" onclick="delRow(${d.realIdx})" style="padding:2px 6px">×</button></td>
+            
+            <td><button class="btn btn-red" onclick="delRow(${d.realIdx}, 'data')" style="padding:2px 6px">×</button></td>
         </tr>`;
     }).join('');
     tbody.innerHTML = html;
@@ -862,34 +841,95 @@ function renderVisionTable() {
     }).join('');
 }
 
+// 3️⃣ 导入体测成绩 (已修复：支持“年级”列优先 + 自动识别耐久跑)
 function importExcel(e) {
-    const f = e.target.files[0]; const r = new FileReader();
+    const f = e.target.files[0]; 
+    const r = new FileReader();
     r.onload = function(ev) {
-        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'}); let matchCount = 0;
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'}); 
+        let matchCount = 0;
         wb.SheetNames.forEach(sheetName => {
-            const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1}); if(json.length < 2) return; 
+            const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1}); 
+            if(json.length < 2) return; 
+            
             let headerRowIdx = -1;
-            for (let i = 0; i < Math.min(json.length, 10); i++) if (json[i] && json[i].join('|').match(/姓名|身高|班级/)) { headerRowIdx = i; break; }
+            for (let i = 0; i < Math.min(json.length, 10); i++) {
+                if (json[i] && json[i].join('|').match(/姓名|身高|班级/)) { 
+                    headerRowIdx = i; break; 
+                }
+            }
             if (headerRowIdx === -1) return; 
+            
             const h = json[headerRowIdx].map(s => String(s || '').trim());
             const findCol = (kws) => h.findIndex(n => kws.some(k => n.includes(k)));
-            const col = { gc: findCol(['班级']), na: findCol(['姓名']), code: findCol(['学籍号']), ht: findCol(['身高']), wt: findCol(['体重']), lu: findCol(['肺活量']), r50: findCol(['50米']), st: findCol(['坐位']), jp: findCol(['跳远']), strM: findCol(['引体']), strF: findCol(['仰卧']), runM: findCol(['1000']), runF: findCol(['800']) };
+            
+            const col = { 
+                gc: findCol(['班级']), 
+                na: findCol(['姓名']), 
+                code: findCol(['学籍号']), 
+                
+                // 🆕 新增：年级列识别
+                gr: findCol(['年级', 'Grade']),
+
+                ht: findCol(['身高']), 
+                wt: findCol(['体重']), 
+                lu: findCol(['肺活量']), 
+                r50: findCol(['50米']), 
+                st: findCol(['坐位']), 
+                jp: findCol(['跳远']), 
+                strM: findCol(['引体']), 
+                strF: findCol(['仰卧']), 
+                runM: findCol(['1000']), 
+                runF: findCol(['800']),
+                runGen: findCol(['耐久跑', '长跑', '耐力']) 
+            };
+
             for(let i = headerRowIdx + 1; i < json.length; i++) {
                 const r = json[i]; if(!r) continue;
-                const rowCls = col.gc > -1 ? r[col.gc] : ''; const rowName = col.na > -1 ? r[col.na] : '';
+                const rowCls = col.gc > -1 ? r[col.gc] : ''; 
+                const rowName = col.na > -1 ? r[col.na] : '';
+                
                 const student = GLOBAL_DATA.find(d => (col.code>-1 && r[col.code] && d.stuCode == r[col.code]) || (d.gc === rowCls && d.name === rowName));
+                
                 if (student) {
-                    if(col.ht>-1) student.h=r[col.ht]; if(col.wt>-1) student.w=r[col.wt]; if(col.lu>-1) student.lung=r[col.lu];
-                    if(col.r50>-1) student.r50=r[col.r50]; if(col.st>-1) student.sit=r[col.st]; if(col.jp>-1) student.jump=r[col.jp];
-                    if(col.strF>-1) student.situp=r[col.strF]; if(col.strM>-1) student.pull=r[col.strM];
-                    if(col.runM>-1) student.r1000=r[col.runM]; if(col.runF>-1) student.r800=r[col.runF];
-                    Object.assign(student, calculateRowData(student)); matchCount++;
+                    // 🆕 核心逻辑：如果Excel里有年级列，写入 customGrade 字段
+                    if (col.gr > -1 && r[col.gr]) {
+                        student.customGrade = String(r[col.gr]).trim(); 
+                    }
+
+                    if(col.ht>-1 && r[col.ht]) student.h=r[col.ht]; 
+                    if(col.wt>-1 && r[col.wt]) student.w=r[col.wt]; 
+                    if(col.lu>-1 && r[col.lu]) student.lung=r[col.lu];
+                    if(col.r50>-1 && r[col.r50]) student.r50=r[col.r50]; 
+                    if(col.st>-1 && r[col.st]) student.sit=r[col.st]; 
+                    if(col.jp>-1 && r[col.jp]) student.jump=r[col.jp];
+                    
+                    if(col.strF>-1 && r[col.strF]) student.situp=r[col.strF]; 
+                    if(col.strM>-1 && r[col.strM]) student.pull=r[col.strM];
+                    
+                    if(col.runM>-1 && r[col.runM]) student.r1000=r[col.runM]; 
+                    if(col.runF>-1 && r[col.runF]) student.r800=r[col.runF];
+
+                    // 耐久跑自动分流逻辑
+                    if (col.runGen > -1) {
+                        const val = r[col.runGen];
+                        if (val !== undefined && val !== '' && val !== null) {
+                            const isMale = normalizeGender(student.ge) === '男';
+                            if (isMale) { if (!student.r1000) student.r1000 = val; } 
+                            else { if (!student.r800) student.r800 = val; }
+                        }
+                    }
+
+                    Object.assign(student, calculateRowData(student)); 
+                    matchCount++;
                 }
             }
         });
-        updateUniqueClasses(); renderTable(); saveData(); alert(`✅ 成绩导入完成！更新 ${matchCount} 人。`);
+        updateUniqueClasses(); renderTable(); saveData(); 
+        alert(`✅ 成绩导入完成！\n👉 如果提供了“年级”列，已优先按该年级计算分数。\n🔄 更新人数：${matchCount} 人`);
         document.getElementById('fileInput').value = '';
-    }; r.readAsArrayBuffer(f);
+    }; 
+    r.readAsArrayBuffer(f);
 }
 
 // 👁️ 视力成绩导入：修复版 (适配您的Excel格式 + 正确写入视力库)
